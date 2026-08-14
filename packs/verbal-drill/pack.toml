@@ -1,0 +1,102 @@
+# Pack B — verbal-drill
+# No workspace at all: transcript + clock only. Exists to prove the
+# engine/pack seam — if this pack needed an engine change, the seam
+# would be wrong. Opposite temperament to Pack A: the interjection
+# budget is effectively unlimited and the interviewer pushes constantly.
+
+[pack]
+name = "verbal-drill"
+title = "Verbal scenario drill"
+
+[session]
+minutes = 30
+workspace = false
+idle_threshold_s = 20
+
+[interviewer]
+max_sentences = 2
+interjection_budget = 999
+opening_line = "Scenario drill. Answer in the chat, conclusion first. Starting now."
+fallback_lines = ["And?", "So what?", "Get to the point.", "Answer first, then explain."]
+banned_phrases = [
+  "great", "exactly", "perfect", "awesome", "excellent", "well done",
+  "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
+  "no worries", "don't worry", "good question", "good point",
+  "interesting", "makes sense", "fair enough",
+]
+persona = '''
+You are a rapid-fire verbal interviewer running a communication drill.
+You pose scenario questions and pressure-test every answer. Register:
+blunt, fast, never satisfied. After every candidate answer, probe —
+attack the weakest claim, demand a conclusion first if they have not
+stated one, ask "so what?" or "what do you actually do first?". If
+they hedge or ramble, call it out in five words or fewer. Keep every
+question short. Never answer for them, never summarize their answer
+back to them, never reassure.
+'''
+
+[visibility]
+recent_messages = 14
+include_task_notes = true
+include_clock = true
+
+[hints]
+ladder = []
+
+[tasks]
+dir = "tasks"
+order = "sequential"
+
+# --- wake rules: opposite of Pack A — push constantly ---
+
+[[rules]]
+id = "advance-after-depth"
+on = ["user_message"]
+when = "task_user_messages >= 4"
+action = "advance"
+priority = 200
+
+[[rules]]
+id = "probe-every-answer"
+on = ["user_message"]
+when = "true"
+action = "speak"
+hint = "none"
+counts_toward_budget = false
+priority = 100
+prompt = "Probe their last answer: the weakest claim, the missing conclusion, or the vague step. One short push."
+
+[[rules]]
+id = "pose-on-present"
+on = ["task_presented"]
+when = "true"
+action = "speak"
+hint = "none"
+priority = 80
+prompt = "A new scenario just appeared on their screen. Demand an answer, conclusion first."
+
+[[rules]]
+id = "silence-is-not-an-answer"
+on = ["idle"]
+when = "task_open"
+action = "speak"
+hint = "none"
+cooldown_s = 15
+priority = 50
+prompt = "They have gone quiet mid-answer. Demand they continue or commit to an answer right now."
+
+# --- report: ONE rubric line — did they lead with the conclusion? ---
+
+[report]
+title = "Verbal drill — conclusion-first check"
+
+[[report.sections]]
+type = "openers"
+title = "first sentence of each answer (flagged = buried the conclusion)"
+ignore_case = true
+flag_patterns = [
+  "^(so|well|um+|uh+|okay|ok|basically|honestly|look)\\b",
+  "^(i think|i guess|i mean|i feel|maybe|probably|it depends|that depends)\\b",
+  "^(let me|before i|first of all|to start|to be honest|to answer that)\\b",
+  "^(there are (a )?(few|couple|several)|it's complicated|this is (a )?(tough|hard|tricky))\\b",
+]

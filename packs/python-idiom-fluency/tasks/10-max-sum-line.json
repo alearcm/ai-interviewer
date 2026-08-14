@@ -1,0 +1,16 @@
+{
+  "task": {
+    "id": "max-sum-line",
+    "title": "Line with the Largest Sum",
+    "tags": [
+      "strings",
+      "enumerate",
+      "comprehension",
+      "max-with-key",
+      "parsing"
+    ],
+    "statement": "Create a file solution.py containing the function:\n\ndef max_sum_line(text):\n\ntext is a multi-line string. Each line holds integers separated by whitespace. Find the line whose numbers add up to the largest sum and return the tuple (line_index, line_sum), where line_index is the 0-based index of that line.\n\nExample:\n    max_sum_line(\"1 2 3\\n10 20\\n4 4 4\")  ->  (1, 30)",
+    "notes": "Planted ambiguities — resolve ONLY if asked, one short sentence each:\n1. How should blank or whitespace-only lines be treated? -> They count as real lines with sum 0 and keep their position in the line numbering.\n2. If two lines tie for the largest sum, which one do I return? -> Return the earliest such line (the one with the smallest index).\n3. Does a trailing newline at the end of the input create an extra empty line? -> No — a single trailing newline does not add a line (splitlines-style line splitting).\nIf asked anything not listed here: the statement is all they get.",
+    "appendix": "Designed to elicit: str.splitlines + a list comprehension with sum(map(int, line.split())) for per-line sums, then max(enumerate(...), key=...) to get (index, sum) in one expression; relies on max returning the first maximal element for tie-breaking.\n\nWatch for: Java-shaped version: text.split(\"\\n\"), a manual counter variable i incremented in a for loop (or range(len(lines))), an inner for loop over line.split() accumulating s += int(tok), and best_sum/best_idx variables updated with if s > best_sum — plus a bug where blank lines are skipped with continue (shifting indices) or where a trailing newline manufactures a phantom (n, 0) line.\n\nHidden checks (for after the session — the interviewer never runs these):\nassert max_sum_line(\"1 2 3\\n10 20\\n4 4 4\") == (1, 30)\nassert max_sum_line(\"2 3\\n5\\n1 1\") == (0, 5)\nassert max_sum_line(\"1 2\\n\\n3 9\") == (2, 12)\nassert max_sum_line(\"-5 -1\\n\\n-2\") == (1, 0)\nassert max_sum_line(\"-1 -2\\n-3 -1\\n\") == (0, -3)\nassert max_sum_line(\"1\\n   \\n2\") == (2, 2)\nassert max_sum_line(\"7\") == (0, 7)\n\nReference:\ndef max_sum_line(text):\n    line_sums = [sum(map(int, line.split())) for line in text.splitlines()]\n    return max(enumerate(line_sums), key=lambda pair: pair[1])"
+  }
+}

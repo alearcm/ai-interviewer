@@ -1,0 +1,16 @@
+{
+  "task": {
+    "id": "group-anagrams",
+    "title": "Group Anagrams",
+    "tags": [
+      "defaultdict",
+      "sorted-key",
+      "dict-of-lists",
+      "hashing",
+      "easy"
+    ],
+    "statement": "Write your solution in a file named solution.py.\n\nImplement:\n\n    def group_anagrams(words):\n\nwords is a list of words (strings). Group together the words that are anagrams of each other, and return the groups as a list of lists of strings. Every word from the input must appear in exactly one group.\n\nExample:\n\n    group_anagrams([\"arc\", \"car\", \"dog\", \"god\"])\n    returns [[\"arc\", \"car\"], [\"dog\", \"god\"]]",
+    "notes": "Planted ambiguities — resolve ONLY if asked, one short sentence each:\n1. Does the order of the groups in the output matter, and if so which order? -> Yes — groups must appear in order of the first occurrence in the input of any of their members.\n2. What order should the words appear in within each group? -> Preserve the original input order within each group (do not sort).\n3. Is the anagram comparison case-sensitive — e.g. is \"Tea\" an anagram of \"eat\"? -> Yes, it is case-sensitive: characters are compared exactly as given, so \"Tea\" and \"eat\" are not anagrams.\nIf asked anything not listed here: the statement is all they get.",
+    "appendix": "Designed to elicit: collections.defaultdict(list) keyed by a canonical form built with \"\".join(sorted(word)) (or tuple(sorted(word))), then list(groups.values()) — relying on dict insertion order (Python 3.7+) to get first-occurrence group order and input order within groups for free.\n\nWatch for: Java-shaped grouping: a plain dict with `if key in groups:` / `else: groups[key] = []` containment checks (HashMap.containsKey style), building the key by converting to a char list, sorting, and concatenating in a loop instead of \"\".join(sorted(word)), or worse an O(n^2) pairwise scan with a `used` boolean array and indexed `for i in range(len(words))` loops.\n\nHidden checks (for after the session — the interviewer never runs these):\nassert group_anagrams([\"arc\", \"car\", \"dog\", \"god\"]) == [[\"arc\", \"car\"], [\"dog\", \"god\"]]\nassert group_anagrams([\"tan\", \"eat\", \"nat\", \"tea\", \"bat\"]) == [[\"tan\", \"nat\"], [\"eat\", \"tea\"], [\"bat\"]]\nassert group_anagrams([\"tea\", \"ate\", \"eat\"]) == [[\"tea\", \"ate\", \"eat\"]]\nassert group_anagrams([\"Tea\", \"eat\", \"tae\"]) == [[\"Tea\"], [\"eat\", \"tae\"]]\nassert group_anagrams([\"ab\", \"ba\", \"ab\"]) == [[\"ab\", \"ba\", \"ab\"]]\nassert group_anagrams([]) == []\n\nReference:\nfrom collections import defaultdict\n\n\ndef group_anagrams(words):\n    groups = defaultdict(list)\n    for word in words:\n        groups[\"\".join(sorted(word))].append(word)\n    return list(groups.values())"
+  }
+}

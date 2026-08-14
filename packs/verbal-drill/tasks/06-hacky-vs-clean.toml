@@ -1,0 +1,9 @@
+[task]
+id = "hacky-vs-clean"
+title = "Fast-and-hacky vs slow-and-clean"
+tags = ["tradeoffs", "judgment"]
+statement = "Demo in one week. Design A is hacky and ready in two days; design B is clean and ready in nine. Which do you build?"
+notes = '''
+Probe angles: Demand A or B in the first word. Then: what makes the hack safe to ship, or the demo safe to slip?
+Push: "What happens to the hack after the demo? Be specific."
+'''

@@ -1,0 +1,49 @@
+#!/bin/sh
+# irun — run a command from a terminal inside the observed workspace
+# and report it (command, output, exit status, duration) to the live
+# session via the spool directory. The engine's watcher picks up the
+# "done" marker; nothing polls.
+#
+# Usage, from inside the workspace directory:
+#     /path/to/tools/irun <command> [args...]
+#
+# Output is shown after the command finishes (kept POSIX-simple).
+
+set -u
+
+PTR="./.session-spool"
+if [ ! -f "$PTR" ]; then
+    echo "irun: no .session-spool in $(pwd) — run this from inside the observed workspace" >&2
+    exit 2
+fi
+SPOOL=$(cat "$PTR")
+if [ ! -d "$SPOOL" ]; then
+    echo "irun: spool directory '$SPOOL' is gone (session over?)" >&2
+    exit 2
+fi
+
+if [ "$#" -eq 0 ]; then
+    echo "usage: irun <command> [args...]" >&2
+    exit 2
+fi
+
+START=$(date +%s)
+ENTRY="$SPOOL/run-$START-$$"
+mkdir -p "$ENTRY" || exit 2
+
+printf '%s ' "$@" | sed 's/ $//' > "$ENTRY/cmd.txt"
+
+"$@" > "$ENTRY/out.txt" 2> "$ENTRY/err.txt"
+STATUS=$?
+END=$(date +%s)
+
+echo "$STATUS" > "$ENTRY/status.txt"
+echo $(( (END - START) * 1000 )) > "$ENTRY/ms.txt"
+
+cat "$ENTRY/out.txt"
+cat "$ENTRY/err.txt" >&2
+
+# The marker is written last: its creation event triggers intake.
+: > "$ENTRY/done"
+
+exit "$STATUS"

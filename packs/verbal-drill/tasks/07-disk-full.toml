@@ -1,0 +1,10 @@
+[task]
+id = "disk-full"
+title = "Primary DB disk at 95%"
+tags = ["incident", "action"]
+statement = "You're on call. The pager fires: primary database disk 95% full and climbing about 1% an hour. Talk me through it."
+notes = '''
+Probe angles: First concrete action in sentence one (buy headroom vs find the source).
+Push: "You have maybe five hours. What exactly do you delete, truncate, or grow?"
+Flag any answer that opens with paging someone else.
+'''

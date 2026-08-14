@@ -1,0 +1,224 @@
+# Pack A — python-idiom-fluency
+# Timed Python fluency drill under a neutral, terse observer.
+# Everything scenario-specific lives HERE; the engine is generic.
+
+[pack]
+name = "python-idiom-fluency"
+title = "Python fluency under observation"
+
+[session]
+minutes = 45
+workspace = true
+# "Stuck" threshold: an idle wake fires only after this long with no
+# save, no run and no message. Also the report's stall threshold.
+idle_threshold_s = 150
+debounce_ms = 1200
+clock_marks = [
+  { id = "ten_left", at_min = 35 },
+  { id = "five_left", at_min = 40 },
+]
+
+[interviewer]
+max_sentences = 2
+interjection_budget = 4
+opening_line = "45 minutes. The task is on your screen. Begin when ready."
+fallback_lines = ["Okay.", "Go on.", "Why that?", "Keep working."]
+banned_phrases = [
+  "great", "exactly", "perfect", "awesome", "excellent", "well done",
+  "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
+  "no worries", "don't worry", "feel free", "happy to", "you're right",
+  "that's right", "you're close", "almost there", "keep it up",
+  "good question", "good point", "makes sense",
+]
+persona = '''
+You are a technical interviewer observing a candidate solving a small
+Python task under time pressure. Your register: neutral, terse,
+unencouraging. Acknowledge without validating — "Okay.", "Go on.",
+"Why that?". Never praise. Never confirm or deny that a solution is
+correct before the candidate has run it, even when you can tell.
+
+You know ONLY what is on screen: the file contents as last saved, the
+commands they ran and the output they got, and what they said. You do
+not perform careful review beyond what is visible. If a bug is subtle
+and they have not run the program, you have seen nothing fail — stay
+out of it and let them ship it.
+
+If they ask about the task: when the interviewer-only notes list that
+exact ambiguity, give its one-sentence resolution and stop. Anything
+not listed: the statement is all they get.
+
+Never supply program text, and never dictate what to type. Prefer
+questions to statements. One thought per reply. If they are wrong but
+moving, let them be wrong.
+'''
+
+[visibility]
+show_latest_snapshot = true
+recent_files = 2
+snapshot_max_chars = 6000
+recent_runs = 2
+run_output_max_chars = 1200
+recent_messages = 10
+include_task_notes = true
+include_clock = true
+
+[hints]
+ladder = [
+  "Ask ONE short, open question about behavior or an input class (e.g. what happens on empty input?). Do not point at any specific line, name or region.",
+  "Ask ONE pointed question aimed at the specific region or behavior involved. Still a question — do not name the problem outright.",
+  "Name the issue plainly in one sentence. Do not dictate the change and do not supply program text.",
+]
+
+[tasks]
+dir = "tasks"
+order = "shuffle"
+
+# --- wake rules: default is STAY SILENT; nothing below, nothing said ---
+
+[[rules]]
+id = "answer-when-spoken-to"
+on = ["user_message"]
+when = "true"
+action = "speak"
+hint = "none"
+counts_toward_budget = false
+priority = 100
+prompt = "The candidate just spoke to you. Reply per persona: resolve a listed ambiguity if that is what they asked; otherwise acknowledge tersely without validating anything."
+
+[[rules]]
+id = "stuck-too-long"
+on = ["idle"]
+when = "task_open and idle_s >= 150"
+action = "speak"
+hint = "escalate"
+cooldown_s = 240
+priority = 50
+prompt = "No save, run or word past the stuck threshold. Nudge at the given hint level, nothing more."
+
+[[rules]]
+id = "flailing-runs"
+on = ["run_executed"]
+when = "failed_run_streak >= 4"
+action = "speak"
+hint = "escalate"
+cooldown_s = 300
+priority = 40
+prompt = "Four straight failing runs — they are burning the clock. Nudge at the given hint level, nothing more."
+
+[[rules]]
+id = "clock-ten-left"
+on = ["clock_mark"]
+when = "mark == 'ten_left'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 60
+prompt = "State that ten minutes remain. Nothing else."
+
+[[rules]]
+id = "clock-five-left"
+on = ["clock_mark"]
+when = "mark == 'five_left'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 60
+prompt = "State that five minutes remain. Nothing else."
+
+# --- report: raw evidence, no scores, no encouragement ---
+
+[report]
+title = "Python fluency session — raw evidence"
+recurrence_log = "recurrence-python-idiom-fluency.tsv"
+
+[[report.sections]]
+type = "header"
+title = "scope"
+text = "Everything below is evidence extracted from the transcript, in minute offsets. No grades. Feed the transcript to a stronger model for deep analysis."
+
+[[report.sections]]
+type = "timeline"
+title = "timeline"
+include_speaks = true
+include_tasks = true
+include_marks = true
+milestones = [
+  { label = "first save (earliest visible typing)", when = "kind == 'file_saved'" },
+  { label = "first run", when = "kind == 'run_executed'" },
+  { label = "first clean run (exit 0)", when = "ok" },
+]
+
+[[report.sections]]
+type = "watchlist"
+title = "tripped idioms"
+scope = "all"
+
+  [[report.sections.patterns]]
+  id = "membership-branch"
+  files = "*.py"
+  pattern = 'if\s+\w+\s+not\s+in\s+\w+\s*:'
+  suggest = "collections.defaultdict / Counter / dict.setdefault usually removes this branch"
+
+  [[report.sections.patterns]]
+  id = "counting-by-hand"
+  files = "*.py"
+  pattern = '\[\s*[^\[\]]+\s*\]\s*\+=\s*1|=\s*\w+\.get\(\s*[^()]+,\s*0\s*\)\s*\+\s*1'
+  suggest = "collections.Counter(iterable) does the whole tally"
+
+  [[report.sections.patterns]]
+  id = "index-loop"
+  files = "*.py"
+  pattern = 'for\s+\w+\s+in\s+range\([^)]*len\('
+  suggest = "enumerate(xs) — or zip(xs, xs[1:]) for neighbors"
+
+  [[report.sections.patterns]]
+  id = "manual-best-scan"
+  files = "*.py"
+  pattern = '=\s*float\(\s*.-?inf|if\s+[^\n:]*[<>]=?\s*(best\w*|max\w*|min\w*|largest|smallest|biggest)|if\s+(best\w*|max\w*|min\w*)\s+is\s+None\s+or'
+  suggest = "max()/min() with key=, sorted(...)[:k], or Counter.most_common"
+
+  [[report.sections.patterns]]
+  id = "str-concat-loop"
+  files = "*.py"
+  pattern = "\\w+\\s*\\+=\\s*(f?[\"']|str\\()"
+  suggest = "collect parts in a list and ''.join(parts) once"
+
+  [[report.sections.patterns]]
+  id = "append-transform-loop"
+  files = "*.py"
+  pattern = 'for\s+[^\n]+:\s*\n\s+\w+\.append\('
+  suggest = "a list/dict/set comprehension covers this loop"
+
+  [[report.sections.patterns]]
+  id = "keys-iteration"
+  files = "*.py"
+  pattern = '\.keys\(\)'
+  suggest = "iterate the dict directly, or .items() when you need pairs"
+
+  [[report.sections.patterns]]
+  id = "pair-not-unpacked"
+  files = "*.py"
+  pattern = 'for\s+\w+\s+in\s+\w+\.items\(\)|(\w+)\[0\][^\n]{0,40}\1\[1\]'
+  suggest = "tuple unpacking: for k, v in d.items() / a, b = pair"
+
+  [[report.sections.patterns]]
+  id = "index-copy-loop"
+  files = "*.py"
+  pattern = '\.append\(\s*\w+\[\s*\w+(\s*[+-]\s*\w+)?\s*\]\s*\)'
+  suggest = "a slice xs[a:b] (or a comprehension) copies a range directly"
+
+[[report.sections]]
+type = "gaps"
+title = "stalls"
+threshold_s = 150
+screen_lines = 12
+
+[[report.sections]]
+type = "spoken_vs_typed"
+title = "narration vs typing"
+diff_lines = 8
+
+[[report.sections]]
+type = "appendix"
+title = "task materials (ambiguities, hidden checks, targets)"
+fields = ["notes", "appendix"]

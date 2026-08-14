@@ -1,0 +1,9 @@
+[task]
+id = "rewrite-or-patch"
+title = "Rewrite vs keep patching"
+tags = ["strategy", "communication"]
+statement = "Your manager asks point-blank: should we rewrite the legacy billing module or keep patching it? Answer them."
+notes = '''
+Probe angles: The answer must start with "rewrite" or "patch" (or a crisp conditional). If it starts with history or context — flag it.
+Push: what evidence would flip their answer; what's the cost of being wrong each way.
+'''

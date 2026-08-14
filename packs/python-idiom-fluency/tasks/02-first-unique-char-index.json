@@ -1,0 +1,15 @@
+{
+  "task": {
+    "id": "first-unique-char-index",
+    "title": "First Non-Repeating Character",
+    "tags": [
+      "strings",
+      "counter",
+      "enumerate",
+      "easy"
+    ],
+    "statement": "Write your solution in solution.py.\n\nImplement exactly this function:\n\ndef first_unique_index(s):\n\nGiven a string s, return the index of the first character in s that appears exactly once in the whole string.\n\nExample:\n\nfirst_unique_index(\"lettercase\") == 0\n\n('l' is the earliest character that occurs exactly once.)",
+    "notes": "Planted ambiguities — resolve ONLY if asked, one short sentence each:\n1. Is the comparison case-sensitive — do 'A' and 'a' count as the same character? -> Yes, it is case-sensitive: 'A' and 'a' are different characters.\n2. What should I return if every character repeats, i.e. there is no non-repeating character? -> Return -1.\n3. What should happen for an empty string? -> An empty string has no non-repeating character, so return -1.\nIf asked anything not listed here: the statement is all they get.",
+    "appendix": "Designed to elicit: collections.Counter for a one-pass frequency map, enumerate for index-value pairs, and next() over a generator expression with a -1 default (counts = Counter(s); next((i for i, ch in enumerate(s) if counts[ch] == 1), -1)).\n\nWatch for: Java-shaped version: building the count map with 'if ch in counts: counts[ch] += 1 else: counts[ch] = 1' (or a nested O(n^2) s.count/inner loop), then 'for i in range(len(s)): if counts[s[i]] == 1: return i' instead of enumerate, with a trailing 'return -1'.\n\nHidden checks (for after the session — the interviewer never runs these):\nassert first_unique_index(\"lettercase\") == 0\nassert first_unique_index(\"aabbc\") == 4\nassert first_unique_index(\"aabb\") == -1\nassert first_unique_index(\"aA\") == 0\nassert first_unique_index(\"Statistics\") == 0\nassert first_unique_index(\"\") == -1\n\nReference:\nfrom collections import Counter\n\n\ndef first_unique_index(s):\n    counts = Counter(s)\n    return next((i for i, ch in enumerate(s) if counts[ch] == 1), -1)\n"
+  }
+}
