@@ -1,0 +1,10 @@
+[task]
+id = "latency-doubled"
+title = "Latency doubled overnight"
+tags = ["debugging", "prioritization"]
+statement = "Production p99 latency doubled overnight. Nothing was deployed. Walk me through your first fifteen minutes."
+notes = '''
+Probe angles: Do they state a leading hypothesis up front, or list ten checks?
+Push: "Which dashboard do you open FIRST?" and "What would change your mind?"
+Call out any tour of possibilities without an ordering.
+'''

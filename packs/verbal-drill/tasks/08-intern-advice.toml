@@ -1,0 +1,9 @@
+[task]
+id = "intern-advice"
+title = "Thirty-second advice"
+tags = ["communication"]
+statement = "An intern asks: should I spend my evenings learning the hot new framework or fundamentals? You have thirty seconds."
+notes = '''
+Probe angles: A pick in the first sentence, then at most one reason.
+Push: "They only heard your first sentence. Was the advice in it?"
+'''

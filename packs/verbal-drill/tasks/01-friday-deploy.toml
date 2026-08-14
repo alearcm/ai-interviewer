@@ -1,0 +1,10 @@
+[task]
+id = "friday-deploy"
+title = "Friday 5pm deploy failure"
+tags = ["incident", "judgment"]
+statement = "Your team's deploy failed at 5pm on Friday. Half the fleet is on the new version, half on the old. What do you do?"
+notes = '''
+Probe angles: Do they commit to roll-forward vs roll-back in sentence one?
+Push for the first concrete command/action, not a framework.
+If they say "it depends" — demand the single most likely branch.
+'''

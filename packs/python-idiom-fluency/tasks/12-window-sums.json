@@ -1,0 +1,16 @@
+{
+  "task": {
+    "id": "window-sums",
+    "title": "Sliding Window Sums",
+    "tags": [
+      "zip",
+      "slicing",
+      "comprehension",
+      "sliding-window",
+      "easy"
+    ],
+    "statement": "In a file named solution.py, write:\n\ndef window_sums(nums, k):\n\nnums is a list of ints and k is the window size. Return a list containing the sum of each contiguous window of length k, moving left to right one position at a time.\n\nExample:\nwindow_sums([1, 2, 3, 4, 5], 3) returns [6, 9, 12]",
+    "notes": "Planted ambiguities — resolve ONLY if asked, one short sentence each:\n1. What should be returned when k is larger than len(nums)? -> Return an empty list, since no full window of length k fits.\n2. What should happen when k is 0 or negative? -> Return an empty list rather than raising or emitting zero-sums.\n3. What should be returned for an empty input list? -> Return an empty list.\nIf asked anything not listed here: the statement is all they get.",
+    "appendix": "Designed to elicit: zip(*) over k offset slices with a generator expression, sum() over each window tuple, and a list comprehension (zip's shortest-input behavior handles every edge case with no explicit guards)\n\nWatch for: A Java-shaped nested index loop (for i in range(...): total = 0; for j in range(i, i+k): total += nums[j]) with a manually appended result list, plus an explicit if-ladder of bounds checks for k <= 0, k > len(nums), and empty input; note the naive comprehension [sum(nums[i:i+k]) for i in range(len(nums)-k+1)] wrongly emits zeros when k == 0 unless guarded\n\nHidden checks (for after the session — the interviewer never runs these):\nassert window_sums([1, 2, 3, 4, 5], 3) == [6, 9, 12]\nassert window_sums([4, -1, 2, -7], 2) == [3, 1, -5]\nassert window_sums([1, 2], 5) == []\nassert window_sums([1, 2, 3], 0) == []\nassert window_sums([1, 2, 3], -2) == []\nassert window_sums([], 3) == []\nassert window_sums([7], 1) == [7]\n\nReference:\ndef window_sums(nums, k):\n    return [sum(window) for window in zip(*(nums[i:] for i in range(k)))]"
+  }
+}

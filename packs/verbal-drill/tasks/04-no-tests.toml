@@ -1,0 +1,10 @@
+[task]
+id = "no-tests"
+title = "Inherited service, no tests, weekly outages"
+tags = ["strategy", "prioritization"]
+statement = "You inherit a service with zero tests and roughly one outage a week. You get two weeks of focused time. What do you fix first?"
+notes = '''
+Probe angles: One thing first — do they name it in the opening sentence?
+Push: why that over the top outage cause? What do they explicitly NOT do?
+Challenge any plan that starts with "first I'd understand the system".
+'''

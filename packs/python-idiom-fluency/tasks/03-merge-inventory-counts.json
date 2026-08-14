@@ -1,0 +1,15 @@
+{
+  "task": {
+    "id": "merge-inventory-counts",
+    "title": "Merge Inventories",
+    "tags": [
+      "dicts",
+      "counter",
+      "dict-merge",
+      "easy"
+    ],
+    "statement": "Write your solution in solution.py.\n\nImplement exactly this function:\n\ndef merge_inventories(a, b):\n\na and b are two warehouse inventories, each a dict mapping item name (str) to an integer count. Return one combined dict: for every item, the counts from a and b are summed.\n\nExample:\n\nmerge_inventories({\"apple\": 2, \"banana\": 1}, {\"apple\": 3, \"banana\": 4}) == {\"apple\": 5, \"banana\": 5}",
+    "notes": "Planted ambiguities — resolve ONLY if asked, one short sentence each:\n1. Can counts be zero or negative, and if a merged total ends up at zero or below, does the item stay in the result? -> Counts may be zero or negative (they represent corrections/returns), and any item whose merged total is not strictly positive must be omitted from the result.\n2. What about items that appear in only one of the two dicts? -> They are included in the result with their count from that one dict, subject to the same strictly-positive rule.\n3. Can either input be empty, and what should I return then? -> Yes, either or both may be empty; merge whatever is there, returning {} when nothing survives.\nIf asked anything not listed here: the statement is all they get.",
+    "appendix": "Designed to elicit: collections.Counter addition — Counter(a) + Counter(b) sums per-key and drops non-positive totals for free; dict() to convert back (return dict(Counter(a) + Counter(b))).\n\nWatch for: Java-shaped version: result = {}; two explicit for-loops copying a then walking b with 'if key in result: result[key] += b[key] else: result[key] = b[key]', followed by a third manual loop (often mutating the dict while iterating it) to delete zero/negative entries — or forgetting to drop them entirely.\n\nHidden checks (for after the session — the interviewer never runs these):\nassert merge_inventories({\"apple\": 2, \"banana\": 1}, {\"apple\": 3, \"banana\": 4}) == {\"apple\": 5, \"banana\": 5}\nassert merge_inventories({\"apple\": 2}, {\"banana\": 3}) == {\"apple\": 2, \"banana\": 3}\nassert merge_inventories({\"apple\": 2, \"banana\": 5}, {\"apple\": -2, \"cherry\": 1}) == {\"banana\": 5, \"cherry\": 1}\nassert merge_inventories({\"apple\": 1}, {\"apple\": -3}) == {}\nassert merge_inventories({\"apple\": 0}, {\"banana\": 2}) == {\"banana\": 2}\nassert merge_inventories({}, {}) == {}\nassert merge_inventories({}, {\"apple\": 4}) == {\"apple\": 4}\n\nReference:\nfrom collections import Counter\n\n\ndef merge_inventories(a, b):\n    return dict(Counter(a) + Counter(b))\n"
+  }
+}

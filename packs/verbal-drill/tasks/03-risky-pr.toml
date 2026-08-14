@@ -1,0 +1,10 @@
+[task]
+id = "risky-pr"
+title = "Big risky PR, deadline tomorrow"
+tags = ["review", "tradeoffs"]
+statement = "A teammate's 3000-line PR lands the feature you demo tomorrow. It touches auth. Approve, block, or something else — what's your call?"
+notes = '''
+Probe angles: Demand the verdict word (approve/block/split) in sentence one.
+Push on: what specifically about auth changes their bar; what they'd cut to shrink risk.
+If they hedge with "I'd talk to them" — ask what they say in that conversation, first sentence.
+'''
