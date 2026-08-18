@@ -179,9 +179,21 @@ class Session:
 
         base = sessions_dir or settings["paths"]["sessions_dir"]
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        self.session_id = "%s-%s" % (stamp, pack.name)
-        self.dir = os.path.join(base, self.session_id)
-        os.makedirs(self.dir, exist_ok=True)
+        # a random token keeps same-second creations from colliding on
+        # the id (and therefore the dir, transcript and manager key)
+        for _ in range(4):
+            token = "%04x" % int.from_bytes(os.urandom(2), "big")
+            candidate = "%s-%s-%s" % (stamp, pack.name, token)
+            path = os.path.join(base, candidate)
+            try:
+                os.makedirs(path)
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise RuntimeError("could not allocate a unique session directory")
+        self.session_id = candidate
+        self.dir = path
         self.transcript = events.Transcript(os.path.join(self.dir, "transcript.jsonl"))
 
         self.workspace: Optional[str] = None
@@ -536,6 +548,7 @@ class Session:
             self._write_to_workspace(
                 entry["path"], entry["content"], mode="create",
                 source="pack", rule="seed", counted=False, hint_level=0,
+                allow_replace=True,
             )
         self._wake(row)
 
@@ -581,11 +594,12 @@ class Session:
         self._write_to_workspace(
             rule.write_file, marked, mode=rule.write_mode, source=rule.write_source,
             rule=rule.id, counted=rule.counts_toward_budget, hint_level=decision.hint_level,
+            allow_replace=False,
         )
 
     def _write_to_workspace(
         self, rel: str, text: str, *, mode: str, source: str, rule: str,
-        counted: bool, hint_level: int,
+        counted: bool, hint_level: int, allow_replace: bool = False,
     ) -> None:
         if self.workspace is None:
             self._record(events.NOTE, text="write skipped: no workspace")
@@ -596,18 +610,31 @@ class Session:
         if not (full == root or full.startswith(root + os.sep)):
             self._record(events.NOTE, text="write refused: path escapes the workspace")
             return
-        if mode == "append" and os.path.isfile(full):
-            with open(full, "r", encoding="utf-8", errors="replace") as fh:
-                existing = fh.read()
-            final = existing.rstrip("\n") + "\n\n" + text.strip("\n") + "\n"
-        else:
-            final = text.strip("\n") + "\n"
-        os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
-        raw = bytes(final, "utf-8")
-        if self.watch is not None:
-            self.watch.register_content(rel, raw)
-        with open(full, "wb") as fh:
-            fh.write(raw)
+        # rule writes may never replace candidate work: "create" onto an
+        # existing file degrades to append (seeds may replace — a new
+        # task legitimately restarts the primary file)
+        if mode == "create" and not allow_replace and os.path.isfile(full):
+            mode = "append"
+        payload = bytes(text.strip("\n") + "\n", "utf-8")
+        try:
+            if mode == "append" and os.path.isfile(full):
+                # byte-level append: candidate bytes pass through
+                # untouched whatever their encoding
+                with open(full, "rb") as fh:
+                    existing = fh.read()
+                if existing and not existing.endswith(b"\n"):
+                    existing += b"\n"
+                raw = existing + b"\n" + payload
+            else:
+                raw = payload
+            os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
+            if self.watch is not None:
+                self.watch.register_content(rel, raw)
+            with open(full, "wb") as fh:
+                fh.write(raw)
+        except OSError as exc:
+            self._record(events.NOTE, text="write to %s failed: %s" % (rel, exc))
+            return
         self._record(
             events.PAD_WRITE,
             path=rel,

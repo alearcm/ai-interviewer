@@ -181,7 +181,7 @@ taxonomy:
 | `pack_snapshot` | the complete raw pack (makes regrade self-contained) |
 | `task_presented` | task id, title, statement |
 | `file_saved` | path, full content, sha256 (debounced, deduped) |
-| `run_executed` | cmd, out, err, exit_status, duration_ms, source, backend |
+| `run_executed` | cmd, out, err, exit_status, duration_ms, source (+ backend on container runs) |
 | `edit_pulse` | path, delta — debounced typing cadence, no content |
 | `pad_write` | path, text, mode, source, rule — interviewer-authored |
 | `user_message` / `interviewer_message` | text (+ rule, hint_level, source, counted) |
@@ -220,7 +220,7 @@ no-network docker before anyone else can reach the pane.
 python -m pytest tests/
 ```
 
-68 tests: the seam grep, expression-language safety, gate determinism,
+73 tests: the seam grep, expression-language safety, gate determinism,
 pack validation, watch-list matching + attribution exclusion, report
 determinism, runner backends, self-checks, recurrence ordering,
 analyze compaction, pad-write/seeding echo suppression, and two

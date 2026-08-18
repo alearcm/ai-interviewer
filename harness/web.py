@@ -365,7 +365,12 @@ def build_app(settings: Dict[str, Any]) -> Any:
                             await asyncio.to_thread(session.submit_line, "/run " + cmd)
                     elif "save" in data:
                         body = data["save"] or {}
-                        full = _workspace_path(session, body.get("path", ""))
+                        try:
+                            full = _workspace_path(session, body.get("path", ""))
+                        except web.HTTPBadRequest as exc:
+                            # a bad save must not tear down the stream
+                            await ws.send_json({"notice": "save refused: %s" % exc.text})
+                            continue
                         content = str(body.get("content", ""))
 
                         def write() -> None:
@@ -373,7 +378,10 @@ def build_app(settings: Dict[str, Any]) -> Any:
                             with open(full, "w", encoding="utf-8") as fh:
                                 fh.write(content)
 
-                        await asyncio.to_thread(write)
+                        try:
+                            await asyncio.to_thread(write)
+                        except OSError as exc:
+                            await ws.send_json({"notice": "save failed: %s" % exc})
                     elif "pulse" in data:
                         body = data["pulse"] or {}
                         session.submit_pulse(body.get("path", ""), body.get("delta", 0))

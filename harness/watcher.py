@@ -195,8 +195,9 @@ class WorkspaceWatch:
 
     def register_content(self, rel: str, raw: bytes) -> None:
         """Pre-register content the ENGINE is about to write, so the
-        resulting change is not re-emitted as a candidate save."""
-        digest = hashlib.sha256(raw).hexdigest()
+        resulting change is not re-emitted as a candidate save. Hash
+        exactly what a snapshot would hash: the truncated prefix."""
+        digest = hashlib.sha256(raw[: self._save_handler.max_bytes]).hexdigest()
         with self._save_handler._lock:
             self._save_handler._hashes[rel.replace(os.sep, "/")] = digest
 

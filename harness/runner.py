@@ -83,6 +83,7 @@ def run_command(cmd: str, cwd: str, run_cfg: Dict[str, Any]) -> Dict[str, Any]:
             cmd=cmd,
             err="[run] backend is 'container' but container_image is not set in config",
             exit_status=-1,
+            backend="container",
         )
         return row
     wrapped = (

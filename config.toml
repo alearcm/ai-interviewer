@@ -29,7 +29,8 @@ name = "claude-sonnet-5"
 # api_key_env defaults to ANTHROPIC_API_KEY for the anthropic provider
 
 [run]
-timeout_s = 30                      # /run and irun command timeout
+timeout_s = 30                      # /run and self-check timeout (irun runs
+                                    # untimed in your own terminal)
 output_max_chars = 4000
 backend = "local"                   # "container" sandboxes every run via docker
                                     # (REQUIRED before sharing the web pane; see docs/DEPLOY.md)

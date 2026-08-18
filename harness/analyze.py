@@ -83,8 +83,29 @@ def build_request(rows: List[Dict[str, Any]]) -> Any:
     pack = _find_pack(rows)
     system = (pack.analyze_prompt if pack and pack.analyze_prompt else DEFAULT_PROMPT)
     lines = "\n".join(json.dumps(r, ensure_ascii=False) for r in compact(rows))
+    materials = ""
+    if pack is not None:
+        presented: List[str] = []
+        for row in rows:
+            if row["kind"] == events.TASK_PRESENTED and row["task_id"] not in presented:
+                presented.append(row["task_id"])
+        chunks = []
+        for task_id in presented:
+            task = pack.task_by_id(task_id)
+            if task and (task.get("notes") or task.get("appendix")):
+                chunks.append(
+                    "### %s\n%s\n\n%s" % (task_id, task.get("notes", ""), task.get("appendix", ""))
+                )
+        if chunks:
+            materials = (
+                "\n\nTask materials from the pack (interviewer notes, references, "
+                "hidden checks — post-session context for your review):\n\n"
+                + "\n\n".join(chunks)
+            )
     user = (
-        "The transcript follows as JSON lines. Review it per your instructions.\n\n" + lines
+        "The transcript follows as JSON lines. Review it per your instructions.\n\n"
+        + lines
+        + materials
     )
     return system, user
 

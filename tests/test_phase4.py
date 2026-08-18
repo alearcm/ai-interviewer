@@ -145,18 +145,25 @@ def test_write_rules_require_workspace():
 
 def test_watchlist_excludes_interviewer_lines():
     pack = load_pack("packs/system-design-doc")
-    doc = "We keep it scalable.\n> INT: is scalable a number?\n> INT: simply quantify it.\n"
-    rows = [
-        {"t": 0.0, "kind": "session_start", "pack": pack.name},
-        {"t": 0.0, "kind": "pack_snapshot", "data": pack.snapshot()},
-        {"t": 1.0, "kind": "task_presented", "task_id": pack.tasks[0]["id"],
-         "title": "x", "statement": "s"},
-        {"t": 9.0, "kind": "file_saved", "path": "design.md", "content": doc},
-        {"t": 20.0, "kind": "session_end", "reason": "user"},
-    ]
-    hits = watchlist_hits(rows, pack)
-    assert any(h["id"] == "unquantified-scale-word" for h in hits)      # candidate's line
-    assert all(not h["line"].startswith("> INT:") for h in hits)        # interviewer's excluded
+
+    def hits_for(doc):
+        rows = [
+            {"t": 0.0, "kind": "session_start", "pack": pack.name},
+            {"t": 0.0, "kind": "pack_snapshot", "data": pack.snapshot()},
+            {"t": 1.0, "kind": "task_presented", "task_id": pack.tasks[0]["id"],
+             "title": "x", "statement": "s"},
+            {"t": 9.0, "kind": "file_saved", "path": "design.md", "content": doc},
+            {"t": 20.0, "kind": "session_end", "reason": "user"},
+        ]
+        return watchlist_hits(rows, pack)
+
+    # non-vacuous: flagged words appear ONLY on interviewer-marked lines
+    only_marked = "> INT: is 'scalable' a number?\n> INT: simply quantify the TODO.\n"
+    assert hits_for(only_marked) == []
+
+    mixed = "We keep it scalable.\n> INT: scalable is not a number.\n"
+    hits = hits_for(mixed)
+    assert len(hits) == 1 and hits[0]["line"] == "We keep it scalable."
 
 
 def test_new_packs_load_with_seeds_and_materials():
@@ -193,6 +200,105 @@ def test_algo_references_pass_their_own_hidden_checks():
     rows.append({"t": t, "kind": "session_end", "reason": "user"})
     results = checks.run_for_session(rows, pack, RUN_CFG)
     assert results and all(r["status"] == "ok" for r in results), results
+
+
+def test_same_second_sessions_get_distinct_dirs(tmp_path):
+    pack = ws_pack([], [{"id": "t1", "title": "T", "statement": "s"}])
+    a = Session(pack, settings_for(tmp_path), Canned(), Pane(interactive=False),
+                sessions_dir=str(tmp_path))
+    b = Session(pack, settings_for(tmp_path), Canned(), Pane(interactive=False),
+                sessions_dir=str(tmp_path))
+    assert a.session_id != b.session_id
+    assert a.dir != b.dir
+
+
+def test_append_preserves_candidate_bytes_and_create_degrades(tmp_path):
+    rules = [{
+        "id": "note", "on": ["user_message"], "when": "true",
+        "action": "write", "write_file": "pad.txt", "write_mode": "create",
+        "write_source": "pack", "write_content": "look here",
+    }]
+    tasks = [{"id": "t1", "title": "T", "statement": "s"}]
+    pack = ws_pack(rules, tasks)
+    session = Session(pack, settings_for(tmp_path), Canned(), Pane(interactive=False),
+                      sessions_dir=str(tmp_path))
+    session.start()
+    time.sleep(0.4)
+    # candidate work that is NOT valid UTF-8, with trailing blank lines
+    target = os.path.join(session.workspace, "pad.txt")
+    original = b"x = 'caf\xe9'  # mine\n\n\n"
+    with open(target, "wb") as fh:
+        fh.write(original)
+    time.sleep(0.6)
+    session.submit_line("hm")  # fires the create-mode write rule
+    time.sleep(0.6)
+    session.submit_line("/end")
+    deadline = time.time() + 10
+    while not session.is_over() and time.time() < deadline:
+        time.sleep(0.1)
+    with open(target, "rb") as fh:
+        final = fh.read()
+    assert final.startswith(original), "candidate bytes were modified"
+    assert b"#> look here" in final
+    rows = read_transcript(os.path.join(session.dir, "transcript.jsonl"))
+    write = next(r for r in rows if r["kind"] == "pad_write" and r["rule"] == "note")
+    assert write["mode"] == "append"  # create onto existing work degraded
+
+
+def test_oversized_seed_still_echo_suppressed(tmp_path):
+    raw = mini_pack_raw(
+        session={"minutes": 0.5, "workspace": True, "idle_threshold_s": 30,
+                 "debounce_ms": 150, "snapshot_max_bytes": 64},
+    )
+    raw["tasks"] = [{"id": "t1", "title": "T", "statement": "s",
+                     "seed": [{"path": "big.txt", "content": "z" * 300}]}]
+    _, rows = run_session(Pack(raw), tmp_path)
+    assert any(r["kind"] == "pad_write" and r["rule"] == "seed" for r in rows)
+    assert not any(r["kind"] == "file_saved" for r in rows)
+
+
+def test_write_failure_does_not_kill_the_session(tmp_path):
+    rules = [{
+        "id": "note", "on": ["user_message"], "when": "true",
+        "action": "write", "write_file": "pad.txt",
+        "write_source": "pack", "write_content": "hello",
+    }]
+    tasks = [{"id": "t1", "title": "T", "statement": "s"}]
+    pack = ws_pack(rules, tasks)
+    session = Session(pack, settings_for(tmp_path), Canned(), Pane(interactive=False),
+                      sessions_dir=str(tmp_path))
+    session.start()
+    time.sleep(0.3)
+    os.makedirs(os.path.join(session.workspace, "pad.txt"))  # the write target is a DIRECTORY
+    session.submit_line("hm")
+    time.sleep(0.5)
+    session.submit_line("/end")  # must still work: the loop survived
+    deadline = time.time() + 10
+    while not session.is_over() and time.time() < deadline:
+        time.sleep(0.1)
+    assert session.is_over(), "write failure killed the session loop"
+    rows = read_transcript(os.path.join(session.dir, "transcript.jsonl"))
+    assert any(r["kind"] == "note" and "failed" in r.get("text", "") for r in rows)
+    assert rows[-1]["kind"] == "session_end"
+
+
+def test_algo_checks_are_falsifiable():
+    """The seeded stub must FAIL every task's hidden checks — a check
+    an empty stub passes is no check at all."""
+    pack = load_pack("packs/leetcode-drill")
+    rows = [
+        {"t": 0.0, "kind": "session_start", "pack": pack.name},
+        {"t": 0.0, "kind": "pack_snapshot", "data": pack.snapshot()},
+    ]
+    t = 1.0
+    for task in pack.tasks[:3]:
+        rows.append({"t": t, "kind": "task_presented", "task_id": task["id"], "title": task["id"]})
+        rows.append({"t": t + 1, "kind": "file_saved", "path": "solution.py",
+                     "content": task["seed"][0]["content"]})
+        t += 10
+    rows.append({"t": t, "kind": "session_end", "reason": "user"})
+    results = checks.run_for_session(rows, pack, RUN_CFG)
+    assert results and all(r["status"] == "failing" for r in results), results
 
 
 def test_report_renders_pad_writes_with_attribution():

@@ -100,7 +100,13 @@ def watchlist_hits(rows: List[Dict[str, Any]], pack: Pack) -> List[Dict[str, Any
                 continue
             content = row["content"]
             for match in pattern.rx.finditer(content):
-                line = match.group(0).splitlines()[0].strip() if match.group(0) else ""
+                # evidence and exclusion both use the CONTAINING line,
+                # not the matched fragment
+                line_start = content.rfind("\n", 0, match.start()) + 1
+                line_end = content.find("\n", match.start())
+                if line_end == -1:
+                    line_end = len(content)
+                line = content[line_start:line_end].strip()
                 if any(e.search(line) for e in excludes):
                     continue  # interviewer-authored line, not the candidate's
                 key = (path, pattern.id, line)
