@@ -26,7 +26,8 @@ Requires Python **3.11+** (uses `tomllib`).
 
 ```sh
 python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[ui,dev]"     # editable install; adds the `harness` command
+                               # (pip install -r requirements.txt works too)
 
 # local model (default config; no API key, ever):
 ollama pull qwen3:4b-instruct-2507-q4_K_M
@@ -220,7 +221,7 @@ no-network docker before anyone else can reach the pane.
 python -m pytest tests/
 ```
 
-73 tests: the seam grep, expression-language safety, gate determinism,
+76 tests: the seam grep, expression-language safety, gate determinism,
 pack validation, watch-list matching + attribution exclusion, report
 determinism, runner backends, self-checks, recurrence ordering,
 analyze compaction, pad-write/seeding echo suppression, and two
