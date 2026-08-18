@@ -9,6 +9,7 @@ title = "Python fluency under observation"
 [session]
 minutes = 45
 workspace = true
+primary_file = "solution.py"
 # "Stuck" threshold: an idle wake fires only after this long with no
 # save, no run and no message. Also the report's stall threshold.
 idle_threshold_s = 150

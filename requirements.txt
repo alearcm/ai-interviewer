@@ -1,3 +1,4 @@
 watchdog>=4.0
-prompt_toolkit>=3.0   # optional: nicer chat pane; plain stdin works without it
-pytest>=8.0           # tests only
+aiohttp>=3.9            # web pane (python -m harness web)
+prompt_toolkit>=3.0     # optional: nicer terminal chat pane; plain stdin works without it
+pytest>=8.0             # tests only

@@ -1,0 +1,28 @@
+# One-command local deployment of the web pane.
+#
+#   docker compose up --build
+#   open http://127.0.0.1:8765
+#
+# The port is published on 127.0.0.1 only — reach it from other devices
+# via Tailscale (run tailscaled on the host) or another private overlay,
+# and put an authenticating proxy in front before sharing with friends
+# (see docs/DEPLOY.md). Sessions and packs live on the host via mounts,
+# so transcripts survive rebuilds and pack edits need no image rebuild.
+services:
+  harness:
+    build: .
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ./sessions:/app/sessions
+      - ./packs:/app/packs
+      - ./config.toml:/app/config.toml:ro
+    environment:
+      # forwarded so config.toml's api_key_env names resolve in-container
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    extra_hosts:
+      # lets config.toml point at an Ollama on the host machine:
+      #   base_url = "http://host.docker.internal:11434/v1"
+      - "host.docker.internal:host-gateway"

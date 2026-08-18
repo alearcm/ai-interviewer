@@ -44,6 +44,8 @@ RULE_FACT_NAMES = frozenset(
         "task_user_messages",
         "hint_level",               # highest hint level used on this task, 0 = none
         "has_workspace",
+        "pulses_total",             # edit pulses seen (0 when no front end sends them)
+        "since_last_pulse_s",
     }
 )
 

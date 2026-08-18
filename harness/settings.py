@@ -29,6 +29,12 @@ DEFAULTS: Dict[str, Any] = {
     "paths": {
         "sessions_dir": "sessions",
     },
+    "web": {
+        "host": "127.0.0.1",
+        "port": 8765,
+        "ui_dir": "",       # "" = the webui directory next to this package
+        "packs_dir": "packs",
+    },
 }
 
 

@@ -1,0 +1,260 @@
+/* Web pane client. The wire format is the transcript: the server
+ * streams {"i": index, "row": {...}} rows over a WebSocket; on
+ * reconnect we ask it to replay from the last index we saw, so a
+ * dropped connection (hello, iPad Safari) is invisible. */
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- landing ---------------- */
+
+let packs = [];
+
+async function initLanding() {
+  packs = await (await fetch("/api/packs")).json();
+  const sel = $("pack-select");
+  sel.innerHTML = "";
+  for (const p of packs) {
+    const o = document.createElement("option");
+    o.value = p.name;
+    o.textContent = `${p.title} (${p.minutes} min${p.workspace ? "" : ", no workspace"})`;
+    sel.appendChild(o);
+  }
+  sel.onchange = fillTasks;
+  fillTasks();
+  renderSessions();
+}
+
+function fillTasks() {
+  const p = packs.find((x) => x.name === $("pack-select").value);
+  const sel = $("task-select");
+  sel.innerHTML = '<option value="">random / pack order</option>';
+  for (const t of p ? p.tasks : []) {
+    const o = document.createElement("option");
+    o.value = t.id;
+    o.textContent = t.title;
+    sel.appendChild(o);
+  }
+}
+
+async function renderSessions() {
+  const list = await (await fetch("/api/sessions")).json();
+  const host = $("session-list");
+  host.innerHTML = list.length ? "" : "<div class='dim'>none yet</div>";
+  for (const s of list) {
+    const row = document.createElement("div");
+    row.className = "row";
+    if (s.past) {
+      row.innerHTML = `<span class="mono dim">${s.id}</span><span class="spacer"></span>
+        <a href="/api/sessions/${s.id}/report" target="_blank">report</a>`;
+    } else {
+      row.innerHTML = `<span class="mono">${s.id}</span><span class="dim">${s.over ? "over" : "live"}</span>
+        <span class="spacer"></span><a href="#s=${s.id}">${s.over ? "view" : "rejoin"}</a>`;
+    }
+    host.appendChild(row);
+  }
+}
+
+$("start").onclick = async () => {
+  $("start-error").textContent = "";
+  const body = {
+    pack: $("pack-select").value,
+    minutes: $("minutes").value || null,
+    task: $("task-select").value || null,
+    provider: $("provider").value || null,
+  };
+  const res = await fetch("/api/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) { $("start-error").textContent = data.error || "failed"; return; }
+  location.hash = "s=" + data.id;
+};
+
+/* ---------------- session view ---------------- */
+
+let ws = null, meta = null, seen = 0, clockBase = null, clockTimer = null;
+let editor = null, dirty = false, saveTimer = null, lastPulse = 0, suppressChange = false;
+
+function fmt(t) {
+  t = Math.max(0, Math.floor(t));
+  return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+}
+
+function addMsg(cls, html) {
+  const el = document.createElement("div");
+  el.className = "msg " + cls;
+  el.innerHTML = html;
+  const log = $("log");
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function renderRow(row) {
+  const t = `<span class="t">${fmt(row.t)}</span>`;
+  switch (row.kind) {
+    case "interviewer_message":
+      addMsg("int", t + esc(row.text));
+      window.speakLine && window.speakLine(row.text);
+      break;
+    case "user_message":
+      addMsg("you", t + esc(row.text));
+      break;
+    case "task_presented":
+      $("task-panel").innerHTML = `<h3>${esc(row.title)}</h3>${esc(row.statement)}`;
+      addMsg("sys", t + "task presented: " + esc(row.title));
+      break;
+    case "run_executed": {
+      const ok = row.exit_status === 0;
+      const out = [row.out, row.err].filter(Boolean).join("\n").trim();
+      addMsg("run", `${t}$ ${esc(row.cmd)} <span class="${ok ? "status-ok" : "status-bad"}">(exit ${row.exit_status})</span>\n${esc(out)}`);
+      break;
+    }
+    case "file_saved":
+      $("save-state").textContent = "observed ✓ " + fmt(row.t);
+      break;
+    case "session_end":
+      onSessionEnd(row);
+      break;
+    default:
+      break; // gate decisions, pulses, idle, marks: invisible in the UI
+  }
+}
+
+function onSessionEnd(row) {
+  $("banner").classList.remove("hidden");
+  $("banner").innerHTML = `session over (${esc(row.reason)}) — <a target="_blank" href="/api/sessions/${meta.id}/report">open the report</a>`;
+  $("btn-report").href = `/api/sessions/${meta.id}/report`;
+  $("btn-report").classList.remove("hidden");
+  if (clockTimer) clearInterval(clockTimer);
+  $("clock").textContent = "done";
+}
+
+function startClock() {
+  if (clockTimer) clearInterval(clockTimer);
+  clockTimer = setInterval(() => {
+    if (!clockBase) return;
+    const elapsed = clockBase.t + (performance.now() - clockBase.at) / 1000;
+    const left = meta.minutes * 60 - elapsed;
+    const el = $("clock");
+    el.textContent = fmt(left);
+    el.classList.toggle("low", left < 300);
+  }, 500);
+}
+
+function connect(sid) {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/api/sessions/${sid}/ws?resume=${seen}`);
+  ws.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if (data.hello) {
+      meta = data.hello;
+      $("s-title").textContent = meta.title;
+      clockBase = { t: meta.now_t, at: performance.now() };
+      startClock();
+      if (meta.has_workspace && meta.primary_file) setupEditor();
+      else $("right").classList.add("hidden");
+      if (meta.over) $("btn-report").href = `/api/sessions/${meta.id}/report`;
+      return;
+    }
+    if (data.notice !== undefined) { addMsg("sys", esc(data.notice)); return; }
+    if (data.i === undefined) return;
+    if (data.i < seen) return; // duplicate across replay/live seam
+    seen = data.i + 1;
+    if (!data.row.stub) renderRow(data.row);
+    if (data.row.t !== undefined) clockBase = { t: data.row.t, at: performance.now() };
+  };
+  ws.onclose = () => {
+    if (meta && !document.hidden) setTimeout(() => connect(sid), 1500);
+    else if (meta) {
+      const onVis = () => { document.removeEventListener("visibilitychange", onVis); connect(sid); };
+      document.addEventListener("visibilitychange", onVis);
+    }
+  };
+}
+
+/* ---------------- editor ---------------- */
+
+async function setupEditor() {
+  $("right").classList.remove("hidden");
+  $("filename").textContent = meta.primary_file;
+  $("run-cmd").value = localStorage.getItem("run-cmd:" + meta.pack) || "";
+  if (editor) return;
+  const res = await fetch(`/api/sessions/${meta.id}/file?path=${encodeURIComponent(meta.primary_file)}`);
+  const data = await res.json();
+  editor = CodeMirror($("editor-host"), {
+    value: data.content || "",
+    mode: "python",
+    lineNumbers: true,
+    indentUnit: 4,
+    viewportMargin: Infinity,
+    extraKeys: { Tab: (cm) => cm.replaceSelection("    ", "end") },
+  });
+  editor.on("change", () => {
+    if (suppressChange) return;
+    dirty = true;
+    $("save-state").textContent = "typing…";
+    // autosave: quiet gap -> save (the engine's watcher debounces again)
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveFile, 1200);
+    // edit pulse: typing cadence signal, throttled, no content
+    const now = Date.now();
+    if (now - lastPulse > 4000 && ws && ws.readyState === 1) {
+      lastPulse = now;
+      ws.send(JSON.stringify({ pulse: { path: meta.primary_file, delta: 1 } }));
+    }
+  });
+}
+
+function saveFile() {
+  if (!dirty || !ws || ws.readyState !== 1) return;
+  dirty = false;
+  $("save-state").textContent = "saving…";
+  ws.send(JSON.stringify({ save: { path: meta.primary_file, content: editor.getValue() } }));
+}
+
+/* ---------------- controls ---------------- */
+
+$("say-form").onsubmit = (e) => {
+  e.preventDefault();
+  const text = $("say").value.trim();
+  if (text && ws && ws.readyState === 1) {
+    if (text.startsWith("/")) ws.send(JSON.stringify({ command: text }));
+    else ws.send(JSON.stringify({ say: text }));
+    $("say").value = "";
+  }
+};
+$("btn-next").onclick = () => ws && ws.send(JSON.stringify({ command: "/next" }));
+$("btn-end").onclick = () => {
+  if (confirm("End the session?")) ws.send(JSON.stringify({ command: "/end" }));
+};
+$("btn-run").onclick = () => {
+  const cmd = $("run-cmd").value.trim();
+  if (!cmd) { $("save-state").textContent = "enter a run command first"; return; }
+  localStorage.setItem("run-cmd:" + meta.pack, cmd);
+  saveFile();
+  ws.send(JSON.stringify({ run: cmd }));
+};
+
+/* ---------------- boot ---------------- */
+
+function boot() {
+  const m = location.hash.match(/s=([\w.-]+)/);
+  if (m) {
+    $("landing").classList.add("hidden");
+    $("session").classList.remove("hidden");
+    seen = 0;
+    connect(m[1]);
+  } else {
+    $("session").classList.add("hidden");
+    $("landing").classList.remove("hidden");
+    initLanding();
+  }
+}
+window.addEventListener("hashchange", () => location.reload());
+boot();

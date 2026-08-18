@@ -129,6 +129,8 @@ class SessionState:
         self.task_user_messages = 0
         self.hint_level = 0
         self.fallback_i = 0
+        self.pulses_total = 0
+        self.last_pulse_t: Optional[float] = None
 
 
 class Session:
@@ -155,6 +157,9 @@ class Session:
         self._over = threading.Event()
         self._loop_thread: Optional[threading.Thread] = None
         self.watch: Optional[WorkspaceWatch] = None
+        # Extra consumers of recorded rows (e.g. a web front end
+        # streaming the transcript live). Called on the loop thread.
+        self.row_sinks: List[Any] = []
 
         base = sessions_dir or settings["paths"]["sessions_dir"]
         stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -247,6 +252,12 @@ class Session:
         return self._over.is_set()
 
     # -- input ----------------------------------------------------------
+    def submit_pulse(self, path: str, delta: int) -> None:
+        """A front end saw typing in `path` (debounced there). Timing
+        only — content still arrives through saves."""
+        if not self._over.is_set():
+            self._q.put({"kind": events.EDIT_PULSE, "path": str(path)[:200], "delta": int(delta)})
+
     def submit_line(self, line: str) -> None:
         line = line.strip()
         if not line:
@@ -319,6 +330,11 @@ class Session:
         row = self.transcript.append(kind, self.offset(), **fields)
         self._apply(row)
         self._display(row)
+        for sink in self.row_sinks:
+            try:
+                sink(row)
+            except Exception:
+                pass
         return row
 
     # -- state ----------------------------------------------------------
@@ -353,6 +369,10 @@ class Session:
             if row.get("counted"):
                 state.unprompted_speaks += 1
             state.hint_level = max(state.hint_level, int(row.get("hint_level", 0)))
+        elif kind == events.EDIT_PULSE:
+            state.pulses_total += 1
+            state.last_pulse_t = t
+            state.last_activity_t = t
         elif kind == events.TASK_PRESENTED:
             state.chat_tail.append({"kind": kind, "text": row["statement"]})
         state.chat_tail = state.chat_tail[-40:]
@@ -394,6 +414,8 @@ class Session:
             "task_user_messages": state.task_user_messages,
             "hint_level": state.hint_level,
             "has_workspace": self.workspace is not None,
+            "pulses_total": state.pulses_total,
+            "since_last_pulse_s": since(state.last_pulse_t),
         }
 
     # -- gate + speech ---------------------------------------------------

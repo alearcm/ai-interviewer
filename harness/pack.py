@@ -134,6 +134,8 @@ class Pack:
         self.idle_threshold_s = float(session.get("idle_threshold_s", 120.0))
         self.debounce_ms = int(session.get("debounce_ms", 1200))
         self.snapshot_max_bytes = int(session.get("snapshot_max_bytes", 200_000))
+        # The file a front-end editor should open by default ("" = none).
+        self.primary_file = str(session.get("primary_file", ""))
         self.ignore_globs = list(session.get("ignore", ["*.pyc", "*.swp", "*~", "*.tmp"]))
         self.clock_marks: List[Dict[str, Any]] = []
         for i, mark in enumerate(session.get("clock_marks", [])):

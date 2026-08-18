@@ -38,7 +38,26 @@ def main(argv: Optional[List[str]] = None) -> int:
     reg_p.add_argument("--out", default=None)
     reg_p.add_argument("--stdout", action="store_true")
 
+    web_p = sub.add_parser("web", help="serve the browser front end (localhost/tailnet only)")
+    web_p.add_argument("--host", default=None)
+    web_p.add_argument("--port", type=int, default=None)
+    web_p.add_argument("--packs", default=None, help="packs directory (default: ./packs)")
+    web_p.add_argument("--config", default=None)
+
     args = parser.parse_args(argv)
+
+    if args.cmd == "web":
+        from .web import WebUnavailable, serve
+
+        try:
+            settings = load_settings(args.config)
+            if args.packs:
+                settings["web"]["packs_dir"] = args.packs
+            serve(settings, host=args.host, port=args.port)
+        except WebUnavailable as exc:
+            print("error: %s" % exc, file=sys.stderr)
+            return 2
+        return 0
 
     if args.cmd == "regrade":
         regrade_argv = [args.session_dir]
