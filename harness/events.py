@@ -30,6 +30,11 @@ SESSION_END = "session_end"
 # that can see edits before they are saved (the browser editor). Carries
 # timing and a size delta, never content — content arrives via saves.
 EDIT_PULSE = "edit_pulse"
+# The ENGINE wrote into the workspace on the interviewer's behalf: a
+# task's seed files at presentation, or a rule-gated write (a marked
+# comment line, a pasted check). Always attributed — these lines are
+# never the candidate's, and reports must not treat them as such.
+PAD_WRITE = "pad_write"
 
 ALL_KINDS = frozenset(
     {
@@ -46,6 +51,7 @@ ALL_KINDS = frozenset(
         NOTE,
         SESSION_END,
         EDIT_PULSE,
+        PAD_WRITE,
     }
 )
 

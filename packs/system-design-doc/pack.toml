@@ -1,0 +1,212 @@
+# Pack — system-design-doc
+# A system-design interview with no whiteboard needed: the artifact is
+# design.md, seeded at task start, observed by the same watcher that
+# watches source files in other packs. Clock marks drive the interview
+# stages (requirements -> high level -> deep dive -> scale) and the
+# interviewer probes each stage from task notes. The watch-list flags
+# vague-claim vocabulary in the doc instead of source anti-patterns —
+# same engine mechanism, different rubric, which is the point.
+
+[pack]
+name = "system-design-doc"
+title = "System design, doc-driven"
+
+[session]
+minutes = 40
+workspace = true
+primary_file = "design.md"
+idle_threshold_s = 120
+debounce_ms = 1500
+clock_marks = [
+  { id = "high_level", at_min = 8 },
+  { id = "deep_dive", at_min = 18 },
+  { id = "scale", at_min = 28 },
+  { id = "wrap", at_min = 36 },
+]
+
+[interviewer]
+max_sentences = 2
+interjection_budget = 12
+pad_marker = "> INT: "
+opening_line = "40 minutes. Write your design in design.md and think out loud here. Start with what you'd nail down first."
+fallback_lines = ["Go on.", "Why that?", "What breaks first?", "Put a number on it."]
+banned_phrases = [
+  "great", "exactly", "perfect", "awesome", "excellent", "well done",
+  "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
+  "no worries", "good question", "makes sense", "interesting",
+]
+persona = '''
+You are a senior system-design interviewer. Register: engaged but
+unsparing — you probe, you never approve. The candidate writes their
+design in design.md (you see it as saved) and narrates in chat.
+
+Anchor everything in their actual doc and words. When they claim a
+property, demand the mechanism or a number. When they name a
+technology, ask what it buys them here. Constraints listed in your
+notes are revealed ONLY if asked — one sentence each; for numbers not
+listed, tell them to pick one and defend it. Challenge on sight any
+vague claim from your notes' red-flag list.
+
+The clock marks tell you which stage the interview is in; probe per
+the matching stage notes. One question at a time. Never write their
+design for them.
+'''
+
+[visibility]
+show_latest_snapshot = true
+recent_files = 1
+snapshot_max_chars = 8000
+recent_runs = 0
+run_output_max_chars = 0
+recent_messages = 12
+include_task_notes = true
+include_clock = true
+
+[hints]
+ladder = [
+  "Ask ONE open question about a part of the design that is currently missing or unquantified.",
+  "Ask ONE pointed question about the weakest specific component or number in the doc.",
+  "Name the gap plainly in one sentence — what the design does not yet survive — without proposing the fix.",
+]
+
+[tasks]
+dir = "tasks"
+order = "shuffle"
+
+[[rules]]
+id = "answer-when-spoken-to"
+on = ["user_message"]
+when = "true"
+action = "speak"
+hint = "none"
+counts_toward_budget = false
+priority = 100
+prompt = "The candidate spoke. Probe or resolve a listed constraint per persona."
+
+[[rules]]
+id = "stage-high-level"
+on = ["clock_mark"]
+when = "mark == 'high_level'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 70
+prompt = "Stage shift: requirements time is over. Push them to commit to a high-level shape per the high_level stage notes."
+
+[[rules]]
+id = "stage-deep-dive"
+on = ["clock_mark"]
+when = "mark == 'deep_dive'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 70
+prompt = "Stage shift: pick the component named in the deep_dive stage notes and take them deep on it."
+
+[[rules]]
+id = "stage-scale"
+on = ["clock_mark"]
+when = "mark == 'scale'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 70
+prompt = "Stage shift: hit them with the scale and failure-mode questions from the scale stage notes."
+
+[[rules]]
+id = "stage-wrap"
+on = ["clock_mark"]
+when = "mark == 'wrap'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 70
+prompt = "Four minutes left. Ask for their single biggest risk and what they would build first."
+
+[[rules]]
+id = "quiet-doc"
+on = ["idle"]
+when = "task_open and idle_s >= 120"
+action = "speak"
+hint = "escalate"
+cooldown_s = 150
+priority = 50
+prompt = "Nothing written or said past the threshold. Nudge at the given hint level."
+
+[report]
+title = "System design session — raw evidence"
+analyze_prompt = '''
+You are reviewing the transcript of a doc-driven system-design
+interview: the candidate wrote design.md under observation while an
+interviewer probed through staged phases (requirements, high level,
+deep dive, scale). Review in Markdown:
+1. Narrative: how the design evolved, from the doc diffs, with
+   timestamps.
+2. Requirements discipline: which constraints they asked for, which
+   they assumed, which they never nailed down (the task notes list
+   what was available to ask).
+3. Depth audit: where they went deep versus where they hand-waved;
+   quote every vague claim that survived into the final doc.
+4. Numbers: every quantity they committed to, and whether it holds up.
+5. Probe handling: quote the interviewer's hardest three questions and
+   judge each answer.
+6. The redesign: in five bullet points, what the strongest version of
+   their design would have been.
+Blunt, evidence-first, minute offsets on every claim.
+'''
+
+[[report.sections]]
+type = "timeline"
+title = "timeline"
+include_speaks = true
+include_tasks = true
+include_marks = true
+milestones = [
+  { label = "first doc save", when = "kind == 'file_saved'" },
+]
+
+[[report.sections]]
+type = "watchlist"
+title = "vague claims left in the final doc"
+scope = "final"
+exclude_lines = "^> INT: "
+
+  [[report.sections.patterns]]
+  id = "unquantified-scale-word"
+  files = "*.md"
+  pattern = '(?i)\b(scalable|highly available|performant|robust|resilient|low.latency)\b'
+  suggest = "quantify it or name the mechanism that delivers it"
+
+  [[report.sections.patterns]]
+  id = "just-use"
+  files = "*.md"
+  pattern = '(?i)\b(just use|simply|obviously|trivially)\b'
+  suggest = "the word hiding the hard part — expand it"
+
+  [[report.sections.patterns]]
+  id = "unnamed-store"
+  files = "*.md"
+  pattern = '(?i)\b(nosql|a database|some queue|a cache)\b'
+  suggest = "name the store/queue and the property you chose it for"
+
+  [[report.sections.patterns]]
+  id = "todo-left"
+  files = "*.md"
+  pattern = '(?i)\bTODO\b'
+  suggest = "a TODO in a design review is a decision you dodged"
+
+[[report.sections]]
+type = "gaps"
+title = "stalls"
+threshold_s = 120
+screen_lines = 14
+
+[[report.sections]]
+type = "spoken_vs_typed"
+title = "narration vs the doc"
+diff_lines = 12
+
+[[report.sections]]
+type = "appendix"
+title = "interviewer materials (constraints, stage probes, red flags)"
+fields = ["notes"]

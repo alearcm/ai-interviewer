@@ -89,6 +89,9 @@ def watchlist_hits(rows: List[Dict[str, Any]], pack: Pack) -> List[Dict[str, Any
     for row in saved:
         finals[row["path"]] = row
 
+    excludes = [s.get("exclude_lines") for s in pack.sections if s["type"] == "watchlist"]
+    excludes = [e for e in excludes if e is not None]
+
     for pattern, scope in patterns:
         source_rows = list(finals.values()) if scope == "final" else saved
         for row in source_rows:
@@ -98,6 +101,8 @@ def watchlist_hits(rows: List[Dict[str, Any]], pack: Pack) -> List[Dict[str, Any
             content = row["content"]
             for match in pattern.rx.finditer(content):
                 line = match.group(0).splitlines()[0].strip() if match.group(0) else ""
+                if any(e.search(line) for e in excludes):
+                    continue  # interviewer-authored line, not the candidate's
                 key = (path, pattern.id, line)
                 if key in seen:
                     continue
@@ -161,6 +166,12 @@ def _render_timeline(section: Dict[str, Any], rows: List[Dict[str, Any]], pack: 
         for row in rows:
             if row["kind"] == events.CLOCK_MARK:
                 entries.append((row["t"], "clock mark: %s" % row.get("mark", "")))
+    if section["include_writes"]:
+        for row in rows:
+            if row["kind"] == events.PAD_WRITE and row.get("rule") != "seed":
+                entries.append(
+                    (row["t"], "interviewer wrote into %s (%s)" % (row["path"], row.get("rule", "?")))
+                )
 
     entries.sort(key=lambda e: e[0])
     lines = []
@@ -235,6 +246,9 @@ def _render_spoken_vs_typed(section: Dict[str, Any], rows: List[Dict[str, Any]],
             lines.append(
                 "- %s  RAN: %s (exit %s)" % (fmt_t(row["t"]), row["cmd"], row["exit_status"])
             )
+        elif row["kind"] == events.PAD_WRITE and row.get("rule") != "seed":
+            body = "\n".join("      " + l for l in row.get("text", "").splitlines())
+            lines.append("- %s  INTERVIEWER WROTE (%s):\n%s" % (fmt_t(row["t"]), row["path"], body))
         elif row["kind"] == events.FILE_SAVED:
             new = row["content"].splitlines()
             old = previous.get(row["path"], [])

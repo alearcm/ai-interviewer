@@ -1,0 +1,179 @@
+# Pack — leetcode-drill
+# Classic timed algorithm interview. Different economy than the
+# fluency pack: the interviewer stays quiet while you work, but the
+# moment you have a PASSING run it shifts into probing — complexity
+# first, then edge cases, then a variant twist (all task data). Each
+# task seeds solution.py with a stub; if you stall deep into the hint
+# ladder, the interviewer pastes its probe test into your file as
+# marked comment lines rather than telling you the answer.
+
+[pack]
+name = "leetcode-drill"
+title = "Algorithm drill under the clock"
+
+[session]
+minutes = 40
+workspace = true
+primary_file = "solution.py"
+idle_threshold_s = 180
+debounce_ms = 1200
+clock_marks = [ { id = "ten_left", at_min = 30 } ]
+
+[interviewer]
+max_sentences = 2
+interjection_budget = 6
+pad_marker = "#> "
+opening_line = "40 minutes. The task is on your screen, a stub is in solution.py. Talk while you work."
+fallback_lines = ["Okay.", "Go on.", "Why that?", "What's the complexity?"]
+banned_phrases = [
+  "great", "exactly", "perfect", "awesome", "excellent", "well done",
+  "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
+  "no worries", "don't worry", "you're right", "that's right",
+  "you're close", "almost there", "good question", "makes sense",
+]
+persona = '''
+You are a standard technical interviewer for a timed algorithm round:
+professional, neutral, economical. No praise and no reassurance, but
+not hostile — think big-tech phone screen. Never confirm correctness
+before they run their program. You know only what is on screen.
+
+While they work: stay out of the way. If they ask about a listed
+ambiguity, give its one-sentence resolution. Anything not listed: the
+statement is all they get.
+
+After their first PASSING run, your job changes: probe. Complexity
+first (time then space), then the follow-up notes for the task, one
+question at a time. If their claimed complexity is wrong, ask a
+question that exposes it — never correct it outright. Never supply
+program text and never dictate an approach.
+'''
+
+[visibility]
+show_latest_snapshot = true
+recent_files = 1
+snapshot_max_chars = 6000
+recent_runs = 2
+run_output_max_chars = 1200
+recent_messages = 10
+include_task_notes = true
+include_clock = true
+
+[hints]
+ladder = [
+  "Ask ONE short open question about an input class or behavior (smallest case, duplicates, empty input). Do not point anywhere specific.",
+  "Ask ONE pointed question about the specific region or the operation their approach repeats too often. Still a question.",
+  "Name the bottleneck or the missing insight in one sentence — the direction, never the construct or any program text.",
+]
+
+[tasks]
+dir = "tasks"
+order = "shuffle"
+
+[checks]
+file = "solution.py"
+cmd = "python3 {file}"
+auto = true
+
+[[rules]]
+id = "answer-when-spoken-to"
+on = ["user_message"]
+when = "true"
+action = "speak"
+hint = "none"
+counts_toward_budget = false
+priority = 100
+prompt = "The candidate spoke. Reply per persona; resolve a listed ambiguity if that is what they asked."
+
+[[rules]]
+id = "post-solve-probe"
+on = ["run_executed"]
+when = "last_run_ok"
+action = "speak"
+hint = "none"
+counts_toward_budget = false
+cooldown_s = 90
+priority = 80
+prompt = "They have a passing run on screen. Probe per the task notes: complexity first if not yet claimed, otherwise the next follow-up. One question."
+
+[[rules]]
+id = "stuck-too-long"
+on = ["idle"]
+when = "task_open and idle_s >= 180"
+action = "speak"
+hint = "escalate"
+cooldown_s = 240
+priority = 50
+prompt = "No save, run or word past the threshold. Nudge at the given hint level only."
+
+[[rules]]
+id = "paste-probe-test"
+on = ["idle"]
+when = "task_open and hint_level >= 2 and idle_s >= 180 and runs_total >= 1"
+action = "write"
+write_file = "solution.py"
+write_mode = "append"
+write_source = "pack"
+write_content = "run this before you continue:\n{task.probe}"
+cooldown_s = 900
+priority = 55
+hint = "none"
+
+[[rules]]
+id = "clock-ten-left"
+on = ["clock_mark"]
+when = "mark == 'ten_left'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 60
+prompt = "State that ten minutes remain. Nothing else."
+
+[report]
+title = "Algorithm drill — raw evidence"
+analyze_prompt = '''
+You are reviewing the transcript of a timed algorithm-interview drill
+(40 minutes, one or more classic problems, seeded stubs, an
+interviewer that probes complexity after the first passing run).
+Review in Markdown:
+1. Narrative of the session in two paragraphs.
+2. Approach audit: from the snapshots, reconstruct their approach
+   arc — first idea, dead ends, the final shape — with timestamps.
+   Compare against the reference and complexity target in the task
+   appendix.
+3. Complexity conversation: quote their claims verbatim and judge
+   them; note whether the interviewer's probes changed their answer.
+4. Testing behavior: when they first ran, what they ran, whether they
+   probed edges themselves or shipped on the example.
+5. Interview craft: narration quality, ambiguity probing, response to
+   hints and pasted tests.
+6. The three drills to run next, prioritized, with evidence.
+No scores, no padding. Quote with minute offsets.
+'''
+
+[[report.sections]]
+type = "timeline"
+title = "timeline"
+include_speaks = true
+include_tasks = true
+include_marks = true
+milestones = [
+  { label = "first save", when = "kind == 'file_saved'" },
+  { label = "first run", when = "kind == 'run_executed'" },
+  { label = "first passing run", when = "ok" },
+]
+
+[[report.sections]]
+type = "gaps"
+title = "stalls"
+threshold_s = 180
+screen_lines = 12
+
+[[report.sections]]
+type = "spoken_vs_typed"
+title = "narration vs typing"
+diff_lines = 8
+
+[[report.sections]]
+type = "appendix"
+title = "task materials (targets, probes, hidden checks)"
+fields = ["notes", "appendix"]

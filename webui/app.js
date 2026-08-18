@@ -118,6 +118,19 @@ function renderRow(row) {
     case "file_saved":
       $("save-state").textContent = "observed ✓ " + fmt(row.t);
       break;
+    case "pad_write":
+      if (editor && row.path === meta.primary_file) {
+        suppressChange = true;
+        if (row.mode === "append" && row.rule !== "seed") {
+          const end = { line: editor.lineCount(), ch: 0 };
+          editor.replaceRange("\n" + row.text + "\n", end, end);
+        } else {
+          editor.setValue(row.text);
+        }
+        suppressChange = false;
+      }
+      if (row.rule !== "seed") addMsg("sys", `<span class="t">${fmt(row.t)}</span>interviewer wrote into ${esc(row.path)}`);
+      break;
     case "session_end":
       onSessionEnd(row);
       break;

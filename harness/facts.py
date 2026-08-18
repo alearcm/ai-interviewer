@@ -46,6 +46,7 @@ RULE_FACT_NAMES = frozenset(
         "has_workspace",
         "pulses_total",             # edit pulses seen (0 when no front end sends them)
         "since_last_pulse_s",
+        "pad_writes_total",         # times the interviewer wrote into the workspace
     }
 )
 

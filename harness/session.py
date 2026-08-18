@@ -18,6 +18,7 @@ from __future__ import annotations
 import heapq
 import os
 import random
+import re
 import threading
 import time
 from queue import Queue
@@ -32,6 +33,20 @@ from .pack import Pack
 from .phrasing import build_call, shape_reply
 from .runner import run_command
 from .watcher import WorkspaceWatch
+
+_TEMPLATE_RX = re.compile(r"\{task\.(\w+)\}")
+
+
+def _fill_template(template: str, task: Dict[str, Any]) -> str:
+    def sub(match: "re.Match[str]") -> str:
+        key = match.group(1)
+        value = task.get(key)
+        if not isinstance(value, str) or not value:
+            raise KeyError(key)
+        return value
+
+    return _TEMPLATE_RX.sub(sub, template)
+
 
 def help_text(has_workspace: bool) -> str:
     run_part = "/run CMD  run a command in the workspace   " if has_workspace else ""
@@ -131,6 +146,7 @@ class SessionState:
         self.fallback_i = 0
         self.pulses_total = 0
         self.last_pulse_t: Optional[float] = None
+        self.pad_writes_total = 0
 
 
 class Session:
@@ -384,6 +400,13 @@ class Session:
             state.pulses_total += 1
             state.last_pulse_t = t
             state.last_activity_t = t
+        elif kind == events.PAD_WRITE:
+            # interviewer-authored: counts as an utterance, never as
+            # candidate activity
+            state.pad_writes_total += 1
+            if row.get("counted"):
+                state.unprompted_speaks += 1
+            state.hint_level = max(state.hint_level, int(row.get("hint_level", 0)))
         elif kind == events.TASK_PRESENTED:
             state.chat_tail.append({"kind": kind, "text": row["statement"]})
         state.chat_tail = state.chat_tail[-40:]
@@ -427,6 +450,7 @@ class Session:
             "has_workspace": self.workspace is not None,
             "pulses_total": state.pulses_total,
             "since_last_pulse_s": since(state.last_pulse_t),
+            "pad_writes_total": state.pad_writes_total,
         }
 
     # -- gate + speech ---------------------------------------------------
@@ -452,6 +476,8 @@ class Session:
             self._speak(decision)
         elif decision.action == "advance":
             self._advance(by=decision.rule.id)
+        elif decision.action == "write":
+            self._pad_write(decision)
 
     def _speak(self, decision: Any) -> None:
         rule = decision.rule
@@ -506,7 +532,92 @@ class Session:
             title=task["title"],
             statement=task["statement"],
         )
+        for entry in task.get("seed", []):
+            self._write_to_workspace(
+                entry["path"], entry["content"], mode="create",
+                source="pack", rule="seed", counted=False, hint_level=0,
+            )
         self._wake(row)
+
+    # -- interviewer writes into the workspace ---------------------------
+    def _pad_write(self, decision: Any) -> None:
+        rule = decision.rule
+        task = self.state.current_task or {}
+        if rule.write_source == "model":
+            state = self.state
+            snapshots = dict(list(state.latest_snapshots.items())[-self.pack.recent_files :])
+            t = self.offset()
+            system, messages = build_call(
+                self.pack,
+                hint_level=decision.hint_level,
+                rule_prompt=rule.prompt
+                + " Respond with the line(s) to write into their file — no preamble.",
+                task=state.current_task,
+                chat_tail=list(state.chat_tail),
+                snapshots=snapshots,
+                recent_runs=list(state.recent_runs),
+                elapsed_s=t,
+                remaining_s=self.minutes * 60.0 - t,
+            )
+            try:
+                raw = self.adapter.reply(system, messages)
+            except AdapterError as exc:
+                self._record(events.NOTE, text="model call failed: %s" % exc)
+                raw = ""
+            text, _, state.fallback_i = shape_reply(raw, self.pack, state.fallback_i)
+        else:
+            try:
+                text = _fill_template(rule.write_content, task)
+            except KeyError as exc:
+                self._record(
+                    events.NOTE,
+                    text="write rule %r skipped: task has no field %s" % (rule.id, exc),
+                )
+                return
+        marked = "\n".join(
+            self.pack.pad_marker + line if line.strip() else line
+            for line in text.strip("\n").splitlines()
+        )
+        self._write_to_workspace(
+            rule.write_file, marked, mode=rule.write_mode, source=rule.write_source,
+            rule=rule.id, counted=rule.counts_toward_budget, hint_level=decision.hint_level,
+        )
+
+    def _write_to_workspace(
+        self, rel: str, text: str, *, mode: str, source: str, rule: str,
+        counted: bool, hint_level: int,
+    ) -> None:
+        if self.workspace is None:
+            self._record(events.NOTE, text="write skipped: no workspace")
+            return
+        rel = rel.replace("\\", "/").lstrip("/")
+        full = os.path.realpath(os.path.join(self.workspace, rel))
+        root = os.path.realpath(self.workspace)
+        if not (full == root or full.startswith(root + os.sep)):
+            self._record(events.NOTE, text="write refused: path escapes the workspace")
+            return
+        if mode == "append" and os.path.isfile(full):
+            with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                existing = fh.read()
+            final = existing.rstrip("\n") + "\n\n" + text.strip("\n") + "\n"
+        else:
+            final = text.strip("\n") + "\n"
+        os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
+        raw = bytes(final, "utf-8")
+        if self.watch is not None:
+            self.watch.register_content(rel, raw)
+        with open(full, "wb") as fh:
+            fh.write(raw)
+        self._record(
+            events.PAD_WRITE,
+            path=rel,
+            text=text,
+            mode=mode,
+            source=source,
+            rule=rule,
+            counted=counted,
+            hint_level=hint_level,
+        )
 
     # -- output ----------------------------------------------------------
     def _display(self, row: Dict[str, Any]) -> None:
@@ -519,6 +630,9 @@ class Session:
             self.pane.saved(row["t"], row["path"])
         elif kind == events.RUN_EXECUTED:
             self.pane.run_result(row)
+        elif kind == events.PAD_WRITE:
+            if row.get("rule") != "seed":
+                self.pane.notice("interviewer wrote into %s" % row["path"])
         elif kind == events.NOTE:
             self.pane.notice(row["text"])
 
