@@ -267,6 +267,56 @@ $("btn-run").onclick = () => {
   ws.send(JSON.stringify({ run: cmd }));
 };
 
+/* ---------------- voice (browser-native, optional) ---------------- */
+
+let voiceOn = localStorage.getItem("voice") === "on";
+
+function renderVoiceButton() {
+  const b = $("btn-voice");
+  b.textContent = "voice: " + (voiceOn ? "on" : "off");
+  b.classList.toggle("on", voiceOn);
+}
+$("btn-voice").onclick = () => {
+  voiceOn = !voiceOn;
+  localStorage.setItem("voice", voiceOn ? "on" : "off");
+  if (!voiceOn && window.speechSynthesis) speechSynthesis.cancel();
+  renderVoiceButton();
+};
+renderVoiceButton();
+
+window.speakLine = (text) => {
+  if (!voiceOn || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+};
+
+// Dictation via the Web Speech API where the browser has it (Chrome,
+// recent Safari). Elsewhere the button hides — on iPad the keyboard's
+// own mic key works fine in the input field.
+const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+if (Rec) {
+  $("btn-mic").classList.remove("hidden");
+  $("btn-mic").onclick = () => {
+    if (rec) { rec.stop(); return; }
+    rec = new Rec();
+    rec.interimResults = true;
+    rec.onresult = (e) => {
+      const text = Array.from(e.results).map((r) => r[0].transcript).join("");
+      $("say").value = text;
+      if (e.results[e.results.length - 1].isFinal) {
+        rec.stop();
+        $("say-form").requestSubmit();
+      }
+    };
+    rec.onend = () => { rec = null; $("btn-mic").classList.remove("on"); };
+    rec.onerror = () => { rec = null; $("btn-mic").classList.remove("on"); };
+    $("btn-mic").classList.add("on");
+    rec.start();
+  };
+}
+
 /* ---------------- boot ---------------- */
 
 function boot() {

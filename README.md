@@ -5,21 +5,20 @@ AI interviewer — plus **scenario packs** that are pure data and prompts.
 Swapping the kind of interview means writing a new pack, never touching
 engine code.
 
-Two packs ship as proof the seam is real:
+Five packs ship:
 
-- **`packs/python-idiom-fluency`** — 45-minute Python fluency drills under a
-  neutral, terse observer. 12 easy-to-medium problems skewed to counting /
-  grouping / parsing / dict-and-set work, each with planted ambiguities the
-  interviewer resolves only if asked, hidden checks, and a target idiom.
-- **`packs/verbal-drill`** — no workspace at all: transcript + clock only.
-  A relentless prober with an effectively unlimited interjection budget.
-  Its whole report rubric is one question: did you lead with your
-  conclusion, or bury it?
+| pack | what it drills | shape |
+|---|---|---|
+| `python-idiom-fluency` | writing idiomatic Python under a clock | 45 min, one problem, silent observer, 4-interjection budget |
+| `python-rehab` | de-rusting via volume | 30 min of 2–4 minute rewrite micro-drills, auto-advance on a clean run |
+| `leetcode-drill` | classic algorithm rounds | 40 min, seeded stubs, quiet until your first passing run — then complexity probing |
+| `system-design-doc` | design interviews, no whiteboard needed | you write `design.md` under observation; staged probing by clock marks |
+| `verbal-drill` | leading with your conclusion | no workspace at all; relentless probing; one-line rubric |
 
 Grading is deliberately **not** the engine's job. The live model only needs
-short, in-persona phrasing (it runs fine on a small local model); the
-append-only transcript is designed to be shipped elsewhere for deep
-analysis, and `regrade.py` reproduces the report offline at any time.
+short, in-persona phrasing (a small local model is plenty); the append-only
+transcript is the real product — `regrade.py` rebuilds the report offline,
+`python -m harness analyze` ships it to a strong model for deep review.
 
 ## Quick start
 
@@ -29,149 +28,151 @@ Requires Python **3.11+** (uses `tomllib`).
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 
-# local model (recommended path — no API key, ever):
+# local model (default config; no API key, ever):
 ollama pull qwen3:4b-instruct-2507-q4_K_M
 
-# the real thing: 45 min of Python fluency under observation
+# the browser front end — recommended:
+python -m harness web            # then open http://127.0.0.1:8765
+# or in docker:
+docker compose up --build
+
+# the terminal front end works too:
 python -m harness run --pack packs/python-idiom-fluency
 
-# the seam proof: verbal drill, no workspace
-python -m harness run --pack packs/verbal-drill
-
-# no model running? the session still works, phrased from the pack's
-# fallback lines:
-python -m harness run --pack packs/python-idiom-fluency --provider canned
+# no model running? sessions still work, phrased from pack fallback lines:
+python -m harness run --pack verbal-drill --provider canned
 ```
 
-During a session the harness prints the workspace path. Open that directory
-in your editor; every save is observed (debounced, snapshotted into the
-transcript). Talk to the interviewer by typing in the chat pane.
+### The web pane
 
-Chat commands: `/run CMD` (run in the workspace, output captured),
-`/next` (next task), `/time`, `/end`, `/help`. Anything else is a message
-to the interviewer.
+`python -m harness web` serves a session picker plus, per session: the
+task, the chat, a live clock, and (for workspace packs) a built-in
+editor with autosave into the observed workspace, a run button, and
+typing-cadence capture (edit pulses — timing only, never content).
+Reconnects are invisible: the WebSocket streams transcript rows and a
+returning client replays from the last row it saw, which is exactly
+what makes it work well from an iPad (see `docs/DEPLOY.md` for the
+Tailscale setup, and the eventual friends-with-auth setup via
+Cloudflare Access). A **voice** toggle speaks interviewer lines aloud
+(browser-native TTS) and a mic button dictates where the browser
+supports it; the iPad keyboard's own dictation also just works.
 
-To run your program from a **separate terminal** instead of `/run`:
+The terminal pane (`run`) observes any external editor instead, and
+`tools/irun` reports runs from a second terminal.
+
+### After a session
 
 ```sh
-cd <workspace-dir>
-/path/to/repo/tools/irun python3 solution.py
+python -m harness check sessions/<id>     # run the pack's hidden checks
+                                          # against what you actually shipped
+python regrade.py sessions/<id>           # rebuild the report offline, byte-identical
+python -m harness analyze sessions/<id>   # deep review via the [analyze] model
 ```
 
-`irun` captures the command, output and exit status and reports them to the
-live session through a spool directory picked up by the file watcher
-(event-driven, nothing polls). Note: `irun` shows output after the command
-finishes.
+`check` also runs automatically at session end for packs that opt in.
+`analyze` uses the pack's own rubric prompt and a **separate** model
+config from the live interviewer — small-and-local for the session,
+strongest-you-have for the review. With no key it writes the complete
+request to `analysis-request.md` for manual pasting instead of failing.
 
-Useful flags: `--minutes 20` (shorter session), `--task word-tally`
-(specific problem), `--workspace DIR` (observe an existing directory),
-`--provider canned` (no model), `--config FILE`.
+Watch-list trips accumulate in `sessions/recurrence-python-idiom-fluency.tsv`
+across sessions; the fluency and rehab packs order their tasks by it
+(`order = "recurrence"`), so your repeat offenders keep coming back
+until they stop tripping.
 
-### Regrade — offline, always
+## Models
 
-```sh
-python regrade.py sessions/<id>            # writes report.regraded.md
-python regrade.py sessions/<id> --stdout
-```
-
-Zero live calls. The transcript embeds the full pack (rules, rubric,
-regexes) at session start, so the regrade is self-contained even if the
-pack has changed since — identical transcript, identical report, byte for
-byte.
-
-## Recommended local model
-
-**`qwen3:4b-instruct-2507-q4_K_M`** (Apache 2.0, ~2.5 GB, runs on CPU) —
-a purpose-built non-thinking instruct model with the best persona-adherence
-per gigabyte at this size, and the interviewer only ever needs 1–2 terse
-sentences. Fallback: `llama3.2:3b-instruct-q4_K_M`. (The engine also strips
-`<think>…</think>` defensively, so thinking-style models work too.)
-
-Works with anything OpenAI-compatible — Ollama, LM Studio, llama.cpp,
-vLLM — via `config.toml`:
+Default: **`qwen3:4b-instruct-2507-q4_K_M`** via Ollama (Apache 2.0,
+~2.5 GB, CPU-friendly) — best persona-adherence per gigabyte at this
+size, and the interviewer only ever needs 1–2 terse sentences. Works
+with anything OpenAI-compatible (Ollama, LM Studio, llama.cpp, vLLM) or
+hosted (OpenRouter, Groq — around a penny per session; Anthropic via
+the thin `anthropic` adapter). Presets in `config.toml` and
+`docs/DEPLOY.md`. Swapping is a config edit; no key is ever required
+for the local path.
 
 ```toml
-[model]
-provider = "openai-compat"     # or "anthropic", or "canned"
+[model]    # the live interviewer: small and fast is correct
+provider = "openai-compat"
 base_url = "http://127.0.0.1:11434/v1"
 name = "qwen3:4b-instruct-2507-q4_K_M"
-api_key_env = ""               # only if your endpoint wants one
-```
 
-Swapping model or provider is a config edit. No key is ever required for
-the default path; the `anthropic` provider is a thin adapter alongside
-(reads `ANTHROPIC_API_KEY`).
+[analyze]  # the post-session deep read: strongest model you have
+provider = "anthropic"
+name = "claude-sonnet-5"
+```
 
 ## The seam
 
-**Engine owns** (in `harness/`): session lifecycle + clock; workspace
-observation (debounced file watch, run capture); a fixed event taxonomy;
-the append-only JSONL transcript; the chat pane; the model adapter; the
-deterministic interjection gate; report generation from the pack's
-template.
+**Engine owns** (`harness/`): session lifecycle + clock; workspace
+observation (debounced file watch, run capture, seeding/pad-write
+mechanics); a fixed event taxonomy; the append-only JSONL transcript;
+the chat panes (terminal and web); the model adapters; the
+deterministic interjection gate; report generation from pack templates.
 
-**Pack owns** (data + prompts only): persona and affect rules; tasks; wake
-rules, thresholds, silence budget; hint ladder; what is "visible" to the
-interviewer; report rubric and watch-lists.
+**Pack owns** (data + prompts only): persona and affect rules; tasks
+(statements, planted ambiguities, hidden checks, seed files, probe
+material); wake rules, thresholds, silence budget; hint ladder;
+visibility; report rubric, watch-lists, and analyze prompt.
 
-Enforced, not aspirational: `tests/test_seam.py` greps every engine file
-for `python`, `idiom`, `code`, `leetcode` (case-insensitive substrings —
-so even `exit_code` or `.encode()` would fail the build). The engine
-speaks only in generic vocabulary: tasks, runs, saves, marks, rules.
+Enforced, not aspirational: `tests/test_seam.py` greps every engine
+source file for `python`, `idiom`, `code`, `leetcode` as
+case-insensitive substrings (the engine says `exit_status`, uses
+`proc.poll()` and `bytes(s, "utf-8")` to stay clean). Packs may say
+anything — they're data.
 
 ## How the interjection gate works
 
-**Rules decide whether to speak; the model only phrases it.** On every wake
+**Rules decide whether to act; the model only phrases.** On every wake
 the gate — deterministic engine code — evaluates the pack's declarative
-rules against a closed set of facts. Only after a rule fires is the model
-called, and it is told which hint level to produce. Every evaluation,
-including the silent ones, is logged to the transcript with the rule that
-fired (or none), each rule's blocking reason, and the facts.
-
-Wakes are **events only** (never interval sampling): a debounced file
-save, a run with its output, an idle-threshold expiry (a deadline timer,
-re-armed by activity), a chat message, pack-defined clock marks, task
+rules against a closed fact set. Every evaluation, including silent
+ones, is logged with the rule that fired (or none), each rule's
+blocking reason, and the facts. Wakes are events only, never interval
+sampling: debounced saves, runs with output, idle-deadline expiry,
+chat messages, edit pulses (activity only), pack clock marks, task
 presentation, session start.
-
-A rule looks like:
 
 ```toml
 [[rules]]
 id = "stuck-too-long"
-on = ["idle"]                      # which wakes it listens to
+on = ["idle"]                          # which wakes it hears
 when = "task_open and idle_s >= 150"   # tiny safe expression language
-action = "speak"                   # or "advance" (next task)
-hint = "escalate"                  # "none" | "escalate" | a level number
+action = "speak"                       # or "advance", or "write"
+hint = "escalate"                      # ladder position; never skips
 cooldown_s = 240
-max_fires = 0                      # 0 = unlimited
-counts_toward_budget = true        # draws down interjection_budget
+max_fires = 0
+counts_toward_budget = true            # draws down interjection_budget
 priority = 50
-prompt = "Extra guidance injected into this call only."
+prompt = "Guidance injected into this one call."
 ```
+
+Three actions:
+- **speak** — persona re-injected on every call, hard sentence cap
+  (default 2), fenced-block/`<think>` stripping (including truncated
+  ones), pack banned-phrase filter, deterministic pack fallback lines
+  when nothing survives. A weak or absent model cannot produce a
+  chatty interviewer.
+- **advance** — next task (also `/next`).
+- **write** — the interviewer writes into the workspace, the way real
+  pad interviews go: pack-sourced templates (`{task.probe}` pastes a
+  task's probe test) or model-phrased comment lines, every line
+  prefixed with the pack's `pad_marker`, append-only — candidate text
+  is never modified, watch-lists exclude marker lines, and reports
+  attribute every write. Task `seed` files (stubs, doc skeletons) use
+  the same machinery at presentation.
 
 Facts available in `when`: clock (`elapsed_s`, `remaining_min`, …),
 activity (`idle_s`, `saves_total`, `runs_total`, `failed_run_streak`,
-`last_run_ok`, `since_last_*_s`, …), conversation (`user_messages_total`,
-`speaks_total`, `unprompted_speaks`, `budget_left`), task state
+`last_run_ok`, `pulses_total`, `since_last_*_s`, …), conversation
+(`user_messages_total`, `unprompted_speaks`, `budget_left`), task state
 (`task_open`, `task_elapsed_s`, `task_user_messages`, `hint_level`,
-`tasks_left`), wake info (`kind`, `mark`), `has_workspace`. Unknown names
-fail at pack load, not mid-session.
-
-Hint levels can never skip: whatever a rule requests is clamped to at most
-one step above the highest level already used on the current task.
-
-**Persona drift is designed against**: the system prompt (persona + hint
-instruction + brevity cap) is rebuilt from pack data on *every* call —
-nothing conversational accumulates outside the transcript — and replies
-are clamped after the fact: fenced blocks stripped, hard sentence cap
-(default 2), pack-listed banned phrases dropped sentence-wise. If nothing
-survives, a deterministic fallback line from the pack is used, so a weak,
-drifting, or absent model can never produce a chatty interviewer.
+`tasks_left`), `pad_writes_total`, wake info (`kind`, `mark`),
+`has_workspace`. Unknown names fail at pack load, not mid-session.
 
 ## Transcript format
 
-`sessions/<id>/transcript.jsonl`, append-only, one JSON object per line,
-each with `t` (seconds offset) and `ts` (wall clock). The closed event
+`sessions/<id>/transcript.jsonl`, append-only, one JSON object per
+line, each with `t` (seconds offset) and `ts` (wall clock). The closed
 taxonomy:
 
 | kind | payload |
@@ -180,30 +181,38 @@ taxonomy:
 | `pack_snapshot` | the complete raw pack (makes regrade self-contained) |
 | `task_presented` | task id, title, statement |
 | `file_saved` | path, full content, sha256 (debounced, deduped) |
-| `run_executed` | cmd, out, err, exit_status, duration_ms, source |
+| `run_executed` | cmd, out, err, exit_status, duration_ms, source, backend |
+| `edit_pulse` | path, delta — debounced typing cadence, no content |
+| `pad_write` | path, text, mode, source, rule — interviewer-authored |
 | `user_message` / `interviewer_message` | text (+ rule, hint_level, source, counted) |
 | `gate_decision` | wake, fired rule or null, per-rule reasons, facts |
 | `idle` / `clock_mark` | idle_s / mark id |
 | `note` | engine notices (e.g. model endpoint failures) |
 | `session_end` | reason |
 
+The web pane streams these same rows as its wire format — there is no
+second schema, which is also what makes reconnect/replay and future
+consumers (dashboards, spectators) cheap.
+
 ## Writing a pack
 
-A pack is a directory: `pack.toml` + a `tasks/` directory of `.toml` or
-`.json` files (`id`, `title`, `statement`, plus free-form `notes` =
-interviewer-only knowledge, `appendix` = report-only material, `tags`).
-Start from `packs/verbal-drill` (minimal) or `packs/python-idiom-fluency`
-(everything). Sections available to the report template: `header`,
-`timeline` (milestone expressions), `watchlist` (regex + suggestion,
-deduped, optionally appended to a cross-session recurrence log), `gaps`
-(stalls with what was on screen), `spoken_vs_typed` (narration vs diffs),
-`openers` (first sentence of each answer, flag patterns), `messages`,
-`appendix`. A pack with `workspace = false` runs purely on transcript +
-clock — that is Pack B, and it required zero engine special-casing.
+A pack is a directory: `pack.toml` + `tasks/` (`.toml` or `.json`;
+fields: `id`, `title`, `statement`, interviewer-only `notes`,
+report-only `appendix`, `tags`, `focus` watch-ids, runnable `check`,
+`seed` files, plus any extra string fields your write rules template
+in). Start from `packs/verbal-drill` (minimal) and go up. Report
+section types: `header`, `timeline` (milestone expressions),
+`watchlist` (regex + suggestion + `exclude_lines`, optional recurrence
+log), `gaps`, `spoken_vs_typed`, `openers`, `messages`, `appendix`.
+A pack with `workspace = false` runs purely on transcript + clock.
 
-The cross-session watch-list log for Pack A accumulates at
-`sessions/recurrence-python-idiom-fluency.tsv` (one line per tripped
-pattern per session), so repeat offenses stay visible.
+## Deployment
+
+`docs/DEPLOY.md` covers the staged path: laptop → home machine +
+Tailscale (iPad from anywhere, zero auth code) → always-on VPS →
+friends via Cloudflare Tunnel + Access, with the `[run]`
+`backend = "container"` switch that sandboxes every run in
+no-network docker before anyone else can reach the pane.
 
 ## Tests
 
@@ -211,32 +220,32 @@ pattern per session), so repeat offenses stay visible.
 python -m pytest tests/
 ```
 
-44 tests: the seam grep, expression-language safety, gate determinism
-(budget/cooldown/priority/no-skip escalation), pack validation, watch-list
-matching, report determinism, and an end-to-end compressed session (real
-scheduler, real watcher, real transcript, canned adapter — no network)
-whose regrade must reproduce the live report byte-for-byte.
+68 tests: the seam grep, expression-language safety, gate determinism,
+pack validation, watch-list matching + attribution exclusion, report
+determinism, runner backends, self-checks, recurrence ordering,
+analyze compaction, pad-write/seeding echo suppression, and two
+end-to-end compressed sessions (terminal and web — real scheduler,
+watcher, spool, WebSocket resume; canned adapter; no network) whose
+offline regrade must reproduce the live report byte-for-byte.
 
 ## Known gaps
 
-- **Typing is invisible between saves.** Activity = saves, runs, messages.
-  Type for three minutes without saving and the engine reads it as idle
-  (the interviewer may prompt you). Deliberate scope, and honestly
-  interview-realistic — but know it's there. Editor autosave narrows it.
-- **The chat pane is line-oriented**, not a TUI. Without `prompt_toolkit`,
-  interviewer lines can interleave with your half-typed input.
-- **`tools/irun` prints output only after the command finishes** (POSIX-sh
-  simplicity); `/run` in the pane behaves the same. Fine for the
-  sub-second runs these drills produce.
-- **Watch-list patterns are line-regex heuristics**, not static analysis:
-  raw evidence with occasional false positives, by design. Deep judgment
-  belongs to whatever you feed the transcript to.
-- **Timed runs on Windows are untested**; the run captor uses process
-  groups (POSIX). Linux and macOS are the supported paths.
-- **On platforms with no native file-event API**, watchdog silently
-  falls back to its polling observer; the engine doesn't assert the
-  resolved observer class. On Linux (inotify) and macOS (FSEvents) it
-  is genuinely event-driven.
-- **No streaming model output** — replies land whole. They're at most two
-  sentences, so latency is the model's generation time.
-- The Anthropic adapter is intentionally thin (no retries/backoff).
+- **Typing is invisible between saves in the terminal flow.** The web
+  editor closes this with edit pulses; with an external editor,
+  autosave narrows it.
+- **The analyze/check loop stops at files.** `analysis.md` and
+  `checks.md` land in the session dir; nothing pushes them anywhere.
+- **Web pane trusts its network.** No auth by design — bind to
+  localhost/tailnet, or front with Cloudflare Access (docs). Sessions
+  aren't per-user namespaced yet.
+- **Container runs can orphan on hard timeout** (docker client is
+  killed; a wedged container may need `docker container prune`).
+- **Dictation support varies by browser**; the voice toggle (TTS) is
+  broadly supported, `SpeechRecognition` less so — the iPad keyboard
+  mic is the reliable path there.
+- **Watch-lists are regex heuristics**, evidence not judgment; deep
+  judgment belongs to `analyze`.
+- **Windows untested** (process groups, inotify); Linux/macOS are the
+  supported paths. On platforms with no native file-event API,
+  watchdog silently falls back to polling.
+- **No pause/resume of the clock** — a session is one continuous take.
