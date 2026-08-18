@@ -271,6 +271,16 @@ def build_app(settings: Dict[str, Any]) -> Any:
         with open(path, "r", encoding="utf-8") as fh:
             return web.Response(text=fh.read(), content_type="text/plain", charset="utf-8")
 
+    async def api_checks(request: Any) -> Any:
+        handle = _get_handle(request)
+        from . import checks as checks_mod
+
+        rows = await asyncio.to_thread(events.read_transcript, handle.session.transcript.path)
+        results = await asyncio.to_thread(
+            checks_mod.run_for_session, rows, handle.session.pack, settings["run"]
+        )
+        return web.json_response(results)
+
     async def api_file_get(request: Any) -> Any:
         handle = _get_handle(request)
         full = _workspace_path(handle.session, request.rel_url.query.get("path", ""))
@@ -367,6 +377,7 @@ def build_app(settings: Dict[str, Any]) -> Any:
     app.router.add_post("/api/sessions", api_create)
     app.router.add_get("/api/sessions/{sid}", api_meta)
     app.router.add_get("/api/sessions/{sid}/report", api_report)
+    app.router.add_post("/api/sessions/{sid}/checks", api_checks)
     app.router.add_get("/api/sessions/{sid}/file", api_file_get)
     app.router.add_put("/api/sessions/{sid}/file", api_file_put)
     app.router.add_get("/api/sessions/{sid}/ws", ws_handler)

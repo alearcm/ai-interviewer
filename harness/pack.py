@@ -186,8 +186,8 @@ class Pack:
 
         tasks_cfg = _table(data, "tasks")
         self.tasks_order = str(tasks_cfg.get("order", "sequential"))
-        if self.tasks_order not in ("sequential", "shuffle"):
-            raise PackError("[tasks] order must be 'sequential' or 'shuffle'")
+        if self.tasks_order not in ("sequential", "shuffle", "recurrence"):
+            raise PackError("[tasks] order must be 'sequential', 'shuffle' or 'recurrence'")
         self.tasks_dir = str(tasks_cfg.get("dir", "tasks"))
 
         self.tasks: List[Dict[str, Any]] = []
@@ -203,12 +203,26 @@ class Pack:
                     "notes": str(task.get("notes", "")).strip(),
                     "appendix": str(task.get("appendix", "")).strip(),
                     "tags": [str(t) for t in task.get("tags", [])],
+                    # watch-list ids this task exercises; drives
+                    # order = "recurrence" (repeat offenders come back)
+                    "focus": [str(f) for f in task.get("focus", [])],
+                    # opaque runnable text for the post-session
+                    # self-check; "" = nothing to run for this task
+                    "check": str(task.get("check", "")),
                 }
             )
+
+        checks = _table(data, "checks")
+        self.checks_file = str(checks.get("file", ""))
+        self.checks_cmd = str(checks.get("cmd", ""))
+        self.checks_auto = bool(checks.get("auto", False))
+        if self.checks_cmd and "{file}" not in self.checks_cmd:
+            raise PackError("[checks] cmd must contain the {file} placeholder")
 
         report = _table(data, "report")
         self.report_title = str(report.get("title", self.title))
         self.recurrence_log = str(report.get("recurrence_log", ""))
+        self.analyze_prompt = str(report.get("analyze_prompt", "")).strip()
         self.sections: List[Dict[str, Any]] = []
         for i, section in enumerate(report.get("sections", [])):
             self.sections.append(self._compile_section(section, i))

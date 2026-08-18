@@ -1,0 +1,18 @@
+{
+  "task": {
+    "id": "first-unique",
+    "title": "first unique item",
+    "tags": [
+      "collections",
+      "generators"
+    ],
+    "statement": "This function returns the first item that occurs exactly once in the list, or None if there is none. The counting pass is Java-shaped: a manual membership check with an init-or-increment branch.\n\n    def first_unique(items):\n        counts = {}\n        for item in items:\n            if item in counts:\n                counts[item] = counts[item] + 1\n            else:\n                counts[item] = 1\n        for item in items:\n            if counts[item] == 1:\n                return item\n        return None\n\nRewrite it idiomatically in solution.py; same name, same behavior.",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: counting-by-hand, membership-branch.",
+    "appendix": "Targets: counting-by-hand, membership-branch\n\nHidden checks (behavior must be preserved):\nassert first_unique([\"a\", \"b\", \"a\", \"c\"]) == \"b\"\nassert first_unique([\"a\", \"a\", \"b\", \"b\"]) is None\nassert first_unique([]) is None\nassert first_unique([3, 1, 3, 1, 2]) == 2\nassert first_unique([\"only\"]) == \"only\"\n\nIdiomatic reference:\nfrom collections import Counter\n\n\ndef first_unique(items):\n    counts = Counter(items)\n    return next((item for item in items if counts[item] == 1), None)\n",
+    "focus": [
+      "counting-by-hand",
+      "membership-branch"
+    ],
+    "check": "assert first_unique([\"a\", \"b\", \"a\", \"c\"]) == \"b\"\nassert first_unique([\"a\", \"a\", \"b\", \"b\"]) is None\nassert first_unique([]) is None\nassert first_unique([3, 1, 3, 1, 2]) == 2\nassert first_unique([\"only\"]) == \"only\""
+  }
+}

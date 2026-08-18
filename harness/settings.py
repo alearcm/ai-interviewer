@@ -35,6 +35,18 @@ DEFAULTS: Dict[str, Any] = {
         "ui_dir": "",       # "" = the webui directory next to this package
         "packs_dir": "packs",
     },
+    # The deep-review model for `analyze` — deliberately separate from
+    # [model]: the live interviewer stays small/local, the post-session
+    # read wants the strongest model you have a key for.
+    "analyze": {
+        "provider": "anthropic",
+        "base_url": "",
+        "name": "claude-sonnet-5",
+        "api_key_env": "",  # anthropic default: ANTHROPIC_API_KEY
+        "temperature": 0.3,
+        "max_tokens": 4000,
+        "timeout_s": 240.0,
+    },
 }
 
 

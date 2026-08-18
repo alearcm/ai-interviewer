@@ -1,0 +1,16 @@
+{
+  "task": {
+    "id": "listcomp-tags",
+    "title": "Clean tags with a list comprehension",
+    "tags": [
+      "list-comprehension"
+    ],
+    "statement": "This tag-normalizer works, but it's an accumulate-into-a-list loop straight out of Java. In Python, a filter-and-transform over a sequence is one expression.\n\n    def clean_tags(raw_tags):\n        cleaned = []\n        for raw in raw_tags:\n            tag = raw.strip().lower()\n            if tag != \"\":\n                cleaned.append(tag)\n        return cleaned\n\nRewrite it idiomatically in solution.py; same name, same behavior. (Hint: this is a single list comprehension — no explicit append, no accumulator.)",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: append-transform-loop.",
+    "appendix": "Targets: append-transform-loop\n\nHidden checks (behavior must be preserved):\nassert clean_tags([\"  Data  \", \"ML\", \"\"]) == [\"data\", \"ml\"]\nassert clean_tags([\"   \", \"\\t\"]) == []\nassert clean_tags([]) == []\nassert clean_tags([\"Ops\"]) == [\"ops\"]\nassert clean_tags([\" A \", \"a\", \" \"]) == [\"a\", \"a\"]\n\nIdiomatic reference:\ndef clean_tags(raw_tags):\n    return [raw.strip().lower() for raw in raw_tags if raw.strip()]\n",
+    "focus": [
+      "append-transform-loop"
+    ],
+    "check": "assert clean_tags([\"  Data  \", \"ML\", \"\"]) == [\"data\", \"ml\"]\nassert clean_tags([\"   \", \"\\t\"]) == []\nassert clean_tags([]) == []\nassert clean_tags([\"Ops\"]) == [\"ops\"]\nassert clean_tags([\" A \", \"a\", \" \"]) == [\"a\", \"a\"]"
+  }
+}

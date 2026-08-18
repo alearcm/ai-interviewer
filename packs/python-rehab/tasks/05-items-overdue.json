@@ -1,0 +1,17 @@
+{
+  "task": {
+    "id": "items-overdue",
+    "title": "Iterate dict items, not keys",
+    "tags": [
+      "dict-iteration"
+    ],
+    "statement": "This function lists everyone whose balance exceeds a limit. Note the Java tell: looping over .keys() and then indexing back into the dict for each value.\n\n    def flag_overdue(balances, limit):\n        flagged = []\n        for name in balances.keys():\n            if balances[name] > limit:\n                flagged.append(name)\n        return flagged\n\nRewrite it idiomatically in solution.py; same name, same behavior. (Hint: .items() gives you key and value together — no balances[name] lookup anywhere.)",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: keys-iteration, append-transform-loop.",
+    "appendix": "Targets: keys-iteration, append-transform-loop\n\nHidden checks (behavior must be preserved):\nassert flag_overdue({\"ana\": 120, \"bo\": 30, \"cy\": 75}, 50) == [\"ana\", \"cy\"]\nassert flag_overdue({\"ana\": 10}, 50) == []\nassert flag_overdue({}, 0) == []\nassert flag_overdue({\"a\": 1, \"b\": 2}, 1) == [\"b\"]\nassert flag_overdue({\"x\": 5, \"y\": 5}, 5) == []\n\nIdiomatic reference:\ndef flag_overdue(balances, limit):\n    return [name for name, balance in balances.items() if balance > limit]\n",
+    "focus": [
+      "keys-iteration",
+      "append-transform-loop"
+    ],
+    "check": "assert flag_overdue({\"ana\": 120, \"bo\": 30, \"cy\": 75}, 50) == [\"ana\", \"cy\"]\nassert flag_overdue({\"ana\": 10}, 50) == []\nassert flag_overdue({}, 0) == []\nassert flag_overdue({\"a\": 1, \"b\": 2}, 1) == [\"b\"]\nassert flag_overdue({\"x\": 5, \"y\": 5}, 5) == []"
+  }
+}

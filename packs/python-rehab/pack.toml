@@ -1,0 +1,199 @@
+# Pack — python-rehab
+# Volume reps for de-rusting: eight-to-twelve 2-4 minute micro-drills
+# per half hour instead of one long problem. Each drill shows a
+# deliberately Java-shaped function; you rewrite it idiomatically under
+# the same terse observer as the fluency pack. Task order is
+# recurrence-weighted against the SHARED recurrence log, so idioms you
+# tripped in any session keep coming back until they stop tripping.
+
+[pack]
+name = "python-rehab"
+title = "Python rehab — idiom micro-drills"
+
+[session]
+minutes = 30
+workspace = true
+primary_file = "solution.py"
+idle_threshold_s = 90
+debounce_ms = 1000
+clock_marks = [ { id = "halfway", at_min = 15 } ]
+
+[interviewer]
+max_sentences = 2
+interjection_budget = 6
+opening_line = "Micro-drills. Rewrite what's on screen idiomatically in solution.py, run it, move on. Go."
+fallback_lines = ["Okay.", "Go on.", "Next.", "Run it."]
+banned_phrases = [
+  "great", "exactly", "perfect", "awesome", "excellent", "well done",
+  "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
+  "no worries", "don't worry", "you're right", "that's right",
+  "good question", "makes sense",
+]
+persona = '''
+You are a terse technical observer running rapid rewrite drills. The
+candidate sees a working but Java-shaped Python function and must
+rewrite it idiomatically, preserving name and behavior. Register:
+neutral, clipped, unencouraging — "Okay.", "Next.", "Run it.". Never
+praise, never confirm a rewrite is idiomatic or correct before they
+run it, never supply program text. You know only what is on screen.
+If they stall, nudge per the hint level you are given, questions
+before statements. Pace over polish: if they are done, move them on.
+'''
+
+[visibility]
+show_latest_snapshot = true
+recent_files = 1
+snapshot_max_chars = 4000
+recent_runs = 1
+run_output_max_chars = 800
+recent_messages = 6
+include_task_notes = true
+include_clock = true
+
+[hints]
+ladder = [
+  "Ask ONE short open question about what the loop or branch is really computing. Do not name any construct.",
+  "Ask ONE pointed question about the specific region that should collapse. Still a question — do not name the replacement.",
+  "Name which construct replaces the region, in one sentence. Do not write the line for them.",
+]
+
+[tasks]
+dir = "tasks"
+order = "recurrence"
+
+[checks]
+file = "solution.py"
+cmd = "python3 {file}"
+auto = true
+
+[[rules]]
+id = "answer-when-spoken-to"
+on = ["user_message"]
+when = "true"
+action = "speak"
+hint = "none"
+counts_toward_budget = false
+priority = 100
+prompt = "The candidate spoke. Reply per persona, tersely, validating nothing."
+
+[[rules]]
+id = "advance-on-clean-run"
+on = ["run_executed"]
+when = "last_run_ok and task_elapsed_s >= 20"
+action = "advance"
+counts_toward_budget = false
+cooldown_s = 5
+priority = 90
+
+[[rules]]
+id = "stalled-drill"
+on = ["idle"]
+when = "task_open and idle_s >= 90"
+action = "speak"
+hint = "escalate"
+cooldown_s = 120
+priority = 50
+prompt = "They are stalled on a micro-drill. Nudge at the given hint level only."
+
+[[rules]]
+id = "drill-dragging"
+on = ["clock_mark"]
+when = "mark == 'halfway'"
+action = "speak"
+hint = "none"
+max_fires = 1
+priority = 60
+prompt = "State that half the time is gone and how many drills they have finished. Nothing else."
+
+[report]
+title = "Rehab drills — raw evidence"
+recurrence_log = "recurrence-python-idiom-fluency.tsv"
+analyze_prompt = '''
+You are reviewing the transcript of a rapid Python idiom rehab session:
+many short rewrite drills of Java-shaped functions by a senior engineer
+whose Python is rusty. For each drill attempted, compare their final
+rewrite to the idiomatic reference in the task appendix and judge: did
+they land the target idiom, half-land it (better but not fluent), or
+miss it? Note time-to-completion per drill and where they hesitated
+(idle wakes, edit-pulse gaps). Finish with: (1) the three idioms to
+drill again tomorrow, with evidence; (2) any idiom they have now
+clearly internalized; (3) one habit-level observation about how they
+approach rewrites. Quote their lines verbatim. No scores, no padding.
+'''
+
+[[report.sections]]
+type = "timeline"
+title = "drill pacing"
+include_speaks = true
+include_tasks = true
+milestones = []
+
+[[report.sections]]
+type = "watchlist"
+title = "shapes that survived the rewrite"
+scope = "all"
+
+  [[report.sections.patterns]]
+  id = "membership-branch"
+  files = "*.py"
+  pattern = 'if\s+\w+\s+not\s+in\s+\w+\s*:'
+  suggest = "collections.defaultdict / Counter / dict.setdefault usually removes this branch"
+
+  [[report.sections.patterns]]
+  id = "counting-by-hand"
+  files = "*.py"
+  pattern = '\[\s*[^\[\]]+\s*\]\s*\+=\s*1|=\s*\w+\.get\(\s*[^()]+,\s*0\s*\)\s*\+\s*1'
+  suggest = "collections.Counter(iterable) does the whole tally"
+
+  [[report.sections.patterns]]
+  id = "index-loop"
+  files = "*.py"
+  pattern = 'for\s+\w+\s+in\s+range\([^)]*len\('
+  suggest = "enumerate(xs) — or zip(xs, xs[1:]) for neighbors"
+
+  [[report.sections.patterns]]
+  id = "manual-best-scan"
+  files = "*.py"
+  pattern = '=\s*float\(\s*.-?inf|if\s+[^\n:]*[<>]=?\s*(best\w*|max\w*|min\w*|largest|smallest|biggest)|if\s+(best\w*|max\w*|min\w*)\s+is\s+None\s+or'
+  suggest = "max()/min() with key=, sorted(...)[:k], or Counter.most_common"
+
+  [[report.sections.patterns]]
+  id = "str-concat-loop"
+  files = "*.py"
+  pattern = "\\w+\\s*\\+=\\s*(f?[\"']|str\\()"
+  suggest = "collect parts in a list and ''.join(parts) once"
+
+  [[report.sections.patterns]]
+  id = "append-transform-loop"
+  files = "*.py"
+  pattern = 'for\s+[^\n]+:\s*\n\s+\w+\.append\('
+  suggest = "a list/dict/set comprehension covers this loop"
+
+  [[report.sections.patterns]]
+  id = "keys-iteration"
+  files = "*.py"
+  pattern = '\.keys\(\)'
+  suggest = "iterate the dict directly, or .items() when you need pairs"
+
+  [[report.sections.patterns]]
+  id = "pair-not-unpacked"
+  files = "*.py"
+  pattern = 'for\s+\w+\s+in\s+\w+\.items\(\)|(\w+)\[0\][^\n]{0,40}\1\[1\]'
+  suggest = "tuple unpacking: for k, v in d.items() / a, b = pair"
+
+  [[report.sections.patterns]]
+  id = "index-copy-loop"
+  files = "*.py"
+  pattern = '\.append\(\s*\w+\[\s*\w+(\s*[+-]\s*\w+)?\s*\]\s*\)'
+  suggest = "a slice xs[a:b] (or a comprehension) copies a range directly"
+
+[[report.sections]]
+type = "gaps"
+title = "stalls"
+threshold_s = 90
+screen_lines = 10
+
+[[report.sections]]
+type = "appendix"
+title = "drill materials (targets, hidden checks, references)"
+fields = ["appendix"]

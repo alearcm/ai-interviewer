@@ -126,9 +126,22 @@ function renderRow(row) {
   }
 }
 
+async function selfCheck() {
+  const el = $("check-result");
+  el.textContent = "running…";
+  const res = await fetch(`/api/sessions/${meta.id}/checks`, { method: "POST" });
+  const results = await res.json();
+  if (!results.length) { el.textContent = "this pack has no hidden checks"; return; }
+  const ok = results.filter((r) => r.status === "ok").length;
+  el.textContent = `${ok}/${results.length} pass — ` +
+    results.map((r) => `${r.title}: ${r.status}`).join(", ");
+}
+window.selfCheck = selfCheck;
+
 function onSessionEnd(row) {
   $("banner").classList.remove("hidden");
-  $("banner").innerHTML = `session over (${esc(row.reason)}) — <a target="_blank" href="/api/sessions/${meta.id}/report">open the report</a>`;
+  $("banner").innerHTML = `session over (${esc(row.reason)}) — <a target="_blank" href="/api/sessions/${meta.id}/report">open the report</a>
+    · <a href="#" onclick="selfCheck(); return false;">run self-check</a><div id="check-result" class="dim"></div>`;
   $("btn-report").href = `/api/sessions/${meta.id}/report`;
   $("btn-report").classList.remove("hidden");
   if (clockTimer) clearInterval(clockTimer);

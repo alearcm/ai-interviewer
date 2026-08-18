@@ -182,6 +182,15 @@ class Session:
         order = list(pack.tasks)
         if pack.tasks_order == "shuffle":
             random.shuffle(order)
+        elif pack.tasks_order == "recurrence":
+            # repeat offenders first: weight each task by how often the
+            # watch patterns it exercises (its `focus`) appear in the
+            # cross-session recurrence log; shuffle first so ties vary
+            random.shuffle(order)
+            counts = report.recurrence_counts(self._recurrence_path() or "")
+            order.sort(
+                key=lambda t: -sum(counts.get(f, 0) for f in t.get("focus", []))
+            )
         if task_id:
             picked = pack.task_by_id(task_id)
             if picked is None:
@@ -195,6 +204,14 @@ class Session:
     # -- clock ----------------------------------------------------------
     def offset(self) -> float:
         return time.monotonic() - self._t0
+
+    def _recurrence_path(self) -> Optional[str]:
+        if not self.pack.recurrence_log:
+            return None
+        path = self.pack.recurrence_log
+        if not os.path.isabs(path):
+            path = os.path.join(self.settings["paths"]["sessions_dir"], path)
+        return path
 
     # -- public control -------------------------------------------------
     def start(self) -> None:
@@ -525,13 +542,10 @@ class Session:
         with open(report_path, "w", encoding="utf-8") as fh:
             fh.write(text)
 
-        if self.pack.recurrence_log:
+        log_path = self._recurrence_path()
+        if log_path:
             hits = report.watchlist_hits(rows, self.pack)
             if hits:
-                base = self.settings["paths"]["sessions_dir"]
-                log_path = self.pack.recurrence_log
-                if not os.path.isabs(log_path):
-                    log_path = os.path.join(base, log_path)
                 os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
                 with open(log_path, "a", encoding="utf-8") as fh:
                     for hit in hits:
@@ -539,6 +553,19 @@ class Session:
                             "%s\t%s\t%s\t%d\t%s\n"
                             % (self.session_id, hit["id"], hit["path"], hit["line_no"], hit["line"])
                         )
+
+        if self.pack.checks_auto and self.pack.checks_cmd:
+            from . import checks as checks_mod
+
+            results = checks_mod.run_for_session(rows, self.pack, self.settings["run"])
+            if results:
+                with open(os.path.join(self.dir, "checks.md"), "w", encoding="utf-8") as fh:
+                    fh.write(checks_mod.render(results))
+                passed = sum(1 for r in results if r["status"] == "ok")
+                self.pane.notice(
+                    "self-check: %d/%d tasks pass the hidden checks (checks.md)"
+                    % (passed, len(results))
+                )
 
         self.pane.notice("session over (%s) — report: %s" % (reason, report_path))
         if self.pane.interactive:

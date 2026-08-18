@@ -44,6 +44,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     web_p.add_argument("--packs", default=None, help="packs directory (default: ./packs)")
     web_p.add_argument("--config", default=None)
 
+    chk_p = sub.add_parser("check", help="run the pack's hidden checks against a finished session")
+    chk_p.add_argument("session_dir")
+    chk_p.add_argument("--config", default=None)
+
+    ana_p = sub.add_parser("analyze", help="deep review of a finished session via the [analyze] model")
+    ana_p.add_argument("session_dir")
+    ana_p.add_argument("--config", default=None)
+    ana_p.add_argument("--out", default=None)
+
     args = parser.parse_args(argv)
 
     if args.cmd == "web":
@@ -58,6 +67,21 @@ def main(argv: Optional[List[str]] = None) -> int:
             print("error: %s" % exc, file=sys.stderr)
             return 2
         return 0
+
+    if args.cmd == "check":
+        from .checks import main as check_main
+
+        return check_main([args.session_dir] + (["--config", args.config] if args.config else []))
+
+    if args.cmd == "analyze":
+        from .analyze import main as analyze_main
+
+        argv2 = [args.session_dir]
+        if args.config:
+            argv2 += ["--config", args.config]
+        if args.out:
+            argv2 += ["--out", args.out]
+        return analyze_main(argv2)
 
     if args.cmd == "regrade":
         regrade_argv = [args.session_dir]

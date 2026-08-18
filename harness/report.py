@@ -52,6 +52,21 @@ def _meta_lines(rows: List[Dict[str, Any]], pack: Pack) -> List[str]:
     return lines
 
 
+def recurrence_counts(log_path: str) -> Dict[str, int]:
+    """Tally the cross-session recurrence log by watch-pattern id.
+    Missing or unreadable log = empty tally."""
+    counts: Dict[str, int] = {}
+    try:
+        with open(log_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) >= 2 and parts[1]:
+                    counts[parts[1]] = counts.get(parts[1], 0) + 1
+    except OSError:
+        pass
+    return counts
+
+
 # -- watchlist ----------------------------------------------------------
 
 
