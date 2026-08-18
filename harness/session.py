@@ -18,6 +18,7 @@ from __future__ import annotations
 import heapq
 import os
 import random
+import re
 import threading
 import time
 from queue import Queue
@@ -30,8 +31,22 @@ from .gate import Gate
 from .facts import NEVER
 from .pack import Pack
 from .phrasing import build_call, shape_reply
-from .runner import execute
+from .runner import run_command
 from .watcher import WorkspaceWatch
+
+_TEMPLATE_RX = re.compile(r"\{task\.(\w+)\}")
+
+
+def _fill_template(template: str, task: Dict[str, Any]) -> str:
+    def sub(match: "re.Match[str]") -> str:
+        key = match.group(1)
+        value = task.get(key)
+        if not isinstance(value, str) or not value:
+            raise KeyError(key)
+        return value
+
+    return _TEMPLATE_RX.sub(sub, template)
+
 
 def help_text(has_workspace: bool) -> str:
     run_part = "/run CMD  run a command in the workspace   " if has_workspace else ""
@@ -129,6 +144,9 @@ class SessionState:
         self.task_user_messages = 0
         self.hint_level = 0
         self.fallback_i = 0
+        self.pulses_total = 0
+        self.last_pulse_t: Optional[float] = None
+        self.pad_writes_total = 0
 
 
 class Session:
@@ -155,12 +173,27 @@ class Session:
         self._over = threading.Event()
         self._loop_thread: Optional[threading.Thread] = None
         self.watch: Optional[WorkspaceWatch] = None
+        # Extra consumers of recorded rows (e.g. a web front end
+        # streaming the transcript live). Called on the loop thread.
+        self.row_sinks: List[Any] = []
 
         base = sessions_dir or settings["paths"]["sessions_dir"]
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        self.session_id = "%s-%s" % (stamp, pack.name)
-        self.dir = os.path.join(base, self.session_id)
-        os.makedirs(self.dir, exist_ok=True)
+        # a random token keeps same-second creations from colliding on
+        # the id (and therefore the dir, transcript and manager key)
+        for _ in range(4):
+            token = "%04x" % int.from_bytes(os.urandom(2), "big")
+            candidate = "%s-%s-%s" % (stamp, pack.name, token)
+            path = os.path.join(base, candidate)
+            try:
+                os.makedirs(path)
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise RuntimeError("could not allocate a unique session directory")
+        self.session_id = candidate
+        self.dir = path
         self.transcript = events.Transcript(os.path.join(self.dir, "transcript.jsonl"))
 
         self.workspace: Optional[str] = None
@@ -177,6 +210,15 @@ class Session:
         order = list(pack.tasks)
         if pack.tasks_order == "shuffle":
             random.shuffle(order)
+        elif pack.tasks_order == "recurrence":
+            # repeat offenders first: weight each task by how often the
+            # watch patterns it exercises (its `focus`) appear in the
+            # cross-session recurrence log; shuffle first so ties vary
+            random.shuffle(order)
+            counts = report.recurrence_counts(self._recurrence_path() or "")
+            order.sort(
+                key=lambda t: -sum(counts.get(f, 0) for f in t.get("focus", []))
+            )
         if task_id:
             picked = pack.task_by_id(task_id)
             if picked is None:
@@ -190,6 +232,14 @@ class Session:
     # -- clock ----------------------------------------------------------
     def offset(self) -> float:
         return time.monotonic() - self._t0
+
+    def _recurrence_path(self) -> Optional[str]:
+        if not self.pack.recurrence_log:
+            return None
+        path = self.pack.recurrence_log
+        if not os.path.isabs(path):
+            path = os.path.join(self.settings["paths"]["sessions_dir"], path)
+        return path
 
     # -- public control -------------------------------------------------
     def start(self) -> None:
@@ -247,6 +297,12 @@ class Session:
         return self._over.is_set()
 
     # -- input ----------------------------------------------------------
+    def submit_pulse(self, path: str, delta: int) -> None:
+        """A front end saw typing in `path` (debounced there). Timing
+        only — content still arrives through saves."""
+        if not self._over.is_set():
+            self._q.put({"kind": events.EDIT_PULSE, "path": str(path)[:200], "delta": int(delta)})
+
     def submit_line(self, line: str) -> None:
         line = line.strip()
         if not line:
@@ -269,13 +325,7 @@ class Session:
             elif not cmd:
                 self.pane.notice("usage: /run CMD")
             else:
-                row = execute(
-                    cmd,
-                    self.workspace,
-                    timeout_s=float(self.settings["run"]["timeout_s"]),
-                    output_max_chars=int(self.settings["run"]["output_max_chars"]),
-                )
-                self._q.put(row)
+                self._q.put(run_command(cmd, self.workspace, self.settings["run"]))
         elif line.startswith("/"):
             self.pane.notice("unknown command; %s" % help_text(self.workspace is not None))
         else:
@@ -319,6 +369,11 @@ class Session:
         row = self.transcript.append(kind, self.offset(), **fields)
         self._apply(row)
         self._display(row)
+        for sink in self.row_sinks:
+            try:
+                sink(row)
+            except Exception:
+                pass
         return row
 
     # -- state ----------------------------------------------------------
@@ -350,6 +405,17 @@ class Session:
             state.speaks_total += 1
             state.chat_tail.append({"kind": kind, "text": row["text"]})
             state.last_speak_t = t
+            if row.get("counted"):
+                state.unprompted_speaks += 1
+            state.hint_level = max(state.hint_level, int(row.get("hint_level", 0)))
+        elif kind == events.EDIT_PULSE:
+            state.pulses_total += 1
+            state.last_pulse_t = t
+            state.last_activity_t = t
+        elif kind == events.PAD_WRITE:
+            # interviewer-authored: counts as an utterance, never as
+            # candidate activity
+            state.pad_writes_total += 1
             if row.get("counted"):
                 state.unprompted_speaks += 1
             state.hint_level = max(state.hint_level, int(row.get("hint_level", 0)))
@@ -394,6 +460,9 @@ class Session:
             "task_user_messages": state.task_user_messages,
             "hint_level": state.hint_level,
             "has_workspace": self.workspace is not None,
+            "pulses_total": state.pulses_total,
+            "since_last_pulse_s": since(state.last_pulse_t),
+            "pad_writes_total": state.pad_writes_total,
         }
 
     # -- gate + speech ---------------------------------------------------
@@ -419,6 +488,8 @@ class Session:
             self._speak(decision)
         elif decision.action == "advance":
             self._advance(by=decision.rule.id)
+        elif decision.action == "write":
+            self._pad_write(decision)
 
     def _speak(self, decision: Any) -> None:
         rule = decision.rule
@@ -473,7 +544,107 @@ class Session:
             title=task["title"],
             statement=task["statement"],
         )
+        for entry in task.get("seed", []):
+            self._write_to_workspace(
+                entry["path"], entry["content"], mode="create",
+                source="pack", rule="seed", counted=False, hint_level=0,
+                allow_replace=True,
+            )
         self._wake(row)
+
+    # -- interviewer writes into the workspace ---------------------------
+    def _pad_write(self, decision: Any) -> None:
+        rule = decision.rule
+        task = self.state.current_task or {}
+        if rule.write_source == "model":
+            state = self.state
+            snapshots = dict(list(state.latest_snapshots.items())[-self.pack.recent_files :])
+            t = self.offset()
+            system, messages = build_call(
+                self.pack,
+                hint_level=decision.hint_level,
+                rule_prompt=rule.prompt
+                + " Respond with the line(s) to write into their file — no preamble.",
+                task=state.current_task,
+                chat_tail=list(state.chat_tail),
+                snapshots=snapshots,
+                recent_runs=list(state.recent_runs),
+                elapsed_s=t,
+                remaining_s=self.minutes * 60.0 - t,
+            )
+            try:
+                raw = self.adapter.reply(system, messages)
+            except AdapterError as exc:
+                self._record(events.NOTE, text="model call failed: %s" % exc)
+                raw = ""
+            text, _, state.fallback_i = shape_reply(raw, self.pack, state.fallback_i)
+        else:
+            try:
+                text = _fill_template(rule.write_content, task)
+            except KeyError as exc:
+                self._record(
+                    events.NOTE,
+                    text="write rule %r skipped: task has no field %s" % (rule.id, exc),
+                )
+                return
+        marked = "\n".join(
+            self.pack.pad_marker + line if line.strip() else line
+            for line in text.strip("\n").splitlines()
+        )
+        self._write_to_workspace(
+            rule.write_file, marked, mode=rule.write_mode, source=rule.write_source,
+            rule=rule.id, counted=rule.counts_toward_budget, hint_level=decision.hint_level,
+            allow_replace=False,
+        )
+
+    def _write_to_workspace(
+        self, rel: str, text: str, *, mode: str, source: str, rule: str,
+        counted: bool, hint_level: int, allow_replace: bool = False,
+    ) -> None:
+        if self.workspace is None:
+            self._record(events.NOTE, text="write skipped: no workspace")
+            return
+        rel = rel.replace("\\", "/").lstrip("/")
+        full = os.path.realpath(os.path.join(self.workspace, rel))
+        root = os.path.realpath(self.workspace)
+        if not (full == root or full.startswith(root + os.sep)):
+            self._record(events.NOTE, text="write refused: path escapes the workspace")
+            return
+        # rule writes may never replace candidate work: "create" onto an
+        # existing file degrades to append (seeds may replace — a new
+        # task legitimately restarts the primary file)
+        if mode == "create" and not allow_replace and os.path.isfile(full):
+            mode = "append"
+        payload = bytes(text.strip("\n") + "\n", "utf-8")
+        try:
+            if mode == "append" and os.path.isfile(full):
+                # byte-level append: candidate bytes pass through
+                # untouched whatever their encoding
+                with open(full, "rb") as fh:
+                    existing = fh.read()
+                if existing and not existing.endswith(b"\n"):
+                    existing += b"\n"
+                raw = existing + b"\n" + payload
+            else:
+                raw = payload
+            os.makedirs(os.path.dirname(full) or ".", exist_ok=True)
+            if self.watch is not None:
+                self.watch.register_content(rel, raw)
+            with open(full, "wb") as fh:
+                fh.write(raw)
+        except OSError as exc:
+            self._record(events.NOTE, text="write to %s failed: %s" % (rel, exc))
+            return
+        self._record(
+            events.PAD_WRITE,
+            path=rel,
+            text=text,
+            mode=mode,
+            source=source,
+            rule=rule,
+            counted=counted,
+            hint_level=hint_level,
+        )
 
     # -- output ----------------------------------------------------------
     def _display(self, row: Dict[str, Any]) -> None:
@@ -486,6 +657,9 @@ class Session:
             self.pane.saved(row["t"], row["path"])
         elif kind == events.RUN_EXECUTED:
             self.pane.run_result(row)
+        elif kind == events.PAD_WRITE:
+            if row.get("rule") != "seed":
+                self.pane.notice("interviewer wrote into %s" % row["path"])
         elif kind == events.NOTE:
             self.pane.notice(row["text"])
 
@@ -503,13 +677,10 @@ class Session:
         with open(report_path, "w", encoding="utf-8") as fh:
             fh.write(text)
 
-        if self.pack.recurrence_log:
+        log_path = self._recurrence_path()
+        if log_path:
             hits = report.watchlist_hits(rows, self.pack)
             if hits:
-                base = self.settings["paths"]["sessions_dir"]
-                log_path = self.pack.recurrence_log
-                if not os.path.isabs(log_path):
-                    log_path = os.path.join(base, log_path)
                 os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
                 with open(log_path, "a", encoding="utf-8") as fh:
                     for hit in hits:
@@ -517,6 +688,19 @@ class Session:
                             "%s\t%s\t%s\t%d\t%s\n"
                             % (self.session_id, hit["id"], hit["path"], hit["line_no"], hit["line"])
                         )
+
+        if self.pack.checks_auto and self.pack.checks_cmd:
+            from . import checks as checks_mod
+
+            results = checks_mod.run_for_session(rows, self.pack, self.settings["run"])
+            if results:
+                with open(os.path.join(self.dir, "checks.md"), "w", encoding="utf-8") as fh:
+                    fh.write(checks_mod.render(results))
+                passed = sum(1 for r in results if r["status"] == "ok")
+                self.pane.notice(
+                    "self-check: %d/%d tasks pass the hidden checks (checks.md)"
+                    % (passed, len(results))
+                )
 
         self.pane.notice("session over (%s) — report: %s" % (reason, report_path))
         if self.pane.interactive:

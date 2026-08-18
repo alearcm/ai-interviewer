@@ -1,0 +1,17 @@
+{
+  "task": {
+    "id": "dictcomp-config",
+    "title": "Extract prefixed config with a dict comprehension",
+    "tags": [
+      "dict-comprehension"
+    ],
+    "statement": "This helper pulls every setting that starts with a prefix and strips the prefix off the key. It builds the dict entry by entry, Java-style, and re-looks-up each value by key.\n\n    def extract_config(settings, prefix):\n        config = {}\n        for key in settings.keys():\n            if key.startswith(prefix):\n                value = settings[key]\n                config[key[len(prefix):]] = value\n        return config\n\nRewrite it idiomatically in solution.py; same name, same behavior. (Hint: iterate .items() and use a dict comprehension — no empty-dict accumulator, no settings[key] lookup.)",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: append-transform-loop, keys-iteration.",
+    "appendix": "Targets: append-transform-loop, keys-iteration\n\nHidden checks (behavior must be preserved):\nassert extract_config({\"db_host\": \"x\", \"db_port\": 5432, \"cache_ttl\": 60}, \"db_\") == {\"host\": \"x\", \"port\": 5432}\nassert extract_config({}, \"app_\") == {}\nassert extract_config({\"a\": 1}, \"\") == {\"a\": 1}\nassert extract_config({\"log_level\": \"info\"}, \"net_\") == {}\nassert extract_config({\"s3_bucket\": \"b\", \"s3_region\": \"r\", \"sqs_url\": \"u\"}, \"s3_\") == {\"bucket\": \"b\", \"region\": \"r\"}\n\nIdiomatic reference:\ndef extract_config(settings, prefix):\n    return {\n        key[len(prefix):]: value\n        for key, value in settings.items()\n        if key.startswith(prefix)\n    }\n",
+    "focus": [
+      "append-transform-loop",
+      "keys-iteration"
+    ],
+    "check": "assert extract_config({\"db_host\": \"x\", \"db_port\": 5432, \"cache_ttl\": 60}, \"db_\") == {\"host\": \"x\", \"port\": 5432}\nassert extract_config({}, \"app_\") == {}\nassert extract_config({\"a\": 1}, \"\") == {\"a\": 1}\nassert extract_config({\"log_level\": \"info\"}, \"net_\") == {}\nassert extract_config({\"s3_bucket\": \"b\", \"s3_region\": \"r\", \"sqs_url\": \"u\"}, \"s3_\") == {\"bucket\": \"b\", \"region\": \"r\"}"
+  }
+}

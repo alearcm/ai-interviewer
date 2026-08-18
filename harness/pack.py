@@ -39,7 +39,10 @@ SECTION_TYPES = {
     "appendix",
 }
 
-_RULE_ACTIONS = {"speak", "advance"}
+_RULE_ACTIONS = {"speak", "advance", "write"}
+_WRITE_MODES = {"append", "create"}
+_WRITE_SOURCES = {"pack", "model"}
+_KNOWN_TASK_FIELDS = {"id", "title", "statement", "notes", "appendix", "tags", "focus", "check", "seed"}
 
 
 def _table(data: Dict[str, Any], key: str) -> Dict[str, Any]:
@@ -86,6 +89,20 @@ class Rule:
         default_counts = "user_message" not in self.on
         self.counts_toward_budget = bool(raw.get("counts_toward_budget", default_counts))
         self.prompt = str(raw.get("prompt", ""))
+        # write-action fields: what to put where, authored by whom
+        self.write_file = str(raw.get("write_file", ""))
+        self.write_content = str(raw.get("write_content", ""))
+        self.write_mode = str(raw.get("write_mode", "append"))
+        self.write_source = str(raw.get("write_source", "pack"))
+        if self.action == "write":
+            if not self.write_file:
+                raise PackError("rule %r: action 'write' needs write_file" % self.id)
+            if self.write_source not in _WRITE_SOURCES:
+                raise PackError("rule %r: write_source must be 'pack' or 'model'" % self.id)
+            if self.write_mode not in _WRITE_MODES:
+                raise PackError("rule %r: write_mode must be 'append' or 'create'" % self.id)
+            if self.write_source == "pack" and not self.write_content:
+                raise PackError("rule %r: pack-sourced writes need write_content" % self.id)
 
 
 class Pattern:
@@ -134,6 +151,8 @@ class Pack:
         self.idle_threshold_s = float(session.get("idle_threshold_s", 120.0))
         self.debounce_ms = int(session.get("debounce_ms", 1200))
         self.snapshot_max_bytes = int(session.get("snapshot_max_bytes", 200_000))
+        # The file a front-end editor should open by default ("" = none).
+        self.primary_file = str(session.get("primary_file", ""))
         self.ignore_globs = list(session.get("ignore", ["*.pyc", "*.swp", "*~", "*.tmp"]))
         self.clock_marks: List[Dict[str, Any]] = []
         for i, mark in enumerate(session.get("clock_marks", [])):
@@ -152,6 +171,9 @@ class Pack:
         self.interjection_budget = int(interviewer.get("interjection_budget", 4))
         self.opening_line = str(interviewer.get("opening_line", ""))
         self.strip_fenced_blocks = bool(interviewer.get("strip_fenced_blocks", True))
+        # prefix stamped on every line the interviewer writes into the
+        # workspace, so authorship stays unambiguous in snapshots
+        self.pad_marker = str(interviewer.get("pad_marker", "#> "))
 
         visibility = _table(data, "visibility")
         self.show_latest_snapshot = bool(visibility.get("show_latest_snapshot", self.workspace))
@@ -181,11 +203,13 @@ class Pack:
             if rule.id in seen:
                 raise PackError("duplicate rule id %r" % rule.id)
             seen.add(rule.id)
+            if rule.action == "write" and not self.workspace:
+                raise PackError("rule %r: write actions need a workspace" % rule.id)
 
         tasks_cfg = _table(data, "tasks")
         self.tasks_order = str(tasks_cfg.get("order", "sequential"))
-        if self.tasks_order not in ("sequential", "shuffle"):
-            raise PackError("[tasks] order must be 'sequential' or 'shuffle'")
+        if self.tasks_order not in ("sequential", "shuffle", "recurrence"):
+            raise PackError("[tasks] order must be 'sequential', 'shuffle' or 'recurrence'")
         self.tasks_dir = str(tasks_cfg.get("dir", "tasks"))
 
         self.tasks: List[Dict[str, Any]] = []
@@ -193,20 +217,47 @@ class Pack:
             for field in ("id", "title", "statement"):
                 if not task.get(field):
                     raise PackError("task #%d is missing %r" % (i, field))
-            self.tasks.append(
-                {
-                    "id": str(task["id"]),
-                    "title": str(task["title"]),
-                    "statement": str(task["statement"]).strip(),
-                    "notes": str(task.get("notes", "")).strip(),
-                    "appendix": str(task.get("appendix", "")).strip(),
-                    "tags": [str(t) for t in task.get("tags", [])],
-                }
-            )
+            seed = []
+            for j, entry in enumerate(task.get("seed", [])):
+                if not isinstance(entry, dict) or "path" not in entry or "content" not in entry:
+                    raise PackError("task %r seed[%d] needs 'path' and 'content'" % (task["id"], j))
+                if not self.workspace:
+                    raise PackError("task %r has seed files but the pack has no workspace" % task["id"])
+                seed.append({"path": str(entry["path"]), "content": str(entry["content"])})
+            built = {
+                "id": str(task["id"]),
+                "title": str(task["title"]),
+                "statement": str(task["statement"]).strip(),
+                "notes": str(task.get("notes", "")).strip(),
+                "appendix": str(task.get("appendix", "")).strip(),
+                "tags": [str(t) for t in task.get("tags", [])],
+                # watch-list ids this task exercises; drives
+                # order = "recurrence" (repeat offenders come back)
+                "focus": [str(f) for f in task.get("focus", [])],
+                # opaque runnable text for the post-session
+                # self-check; "" = nothing to run for this task
+                "check": str(task.get("check", "")),
+                # files written into the workspace at presentation
+                "seed": seed,
+            }
+            # extra string fields pass through opaquely so write-rule
+            # templates can reference pack-specific material
+            for key, value in task.items():
+                if key not in _KNOWN_TASK_FIELDS and isinstance(value, str):
+                    built[key] = value
+            self.tasks.append(built)
+
+        checks = _table(data, "checks")
+        self.checks_file = str(checks.get("file", ""))
+        self.checks_cmd = str(checks.get("cmd", ""))
+        self.checks_auto = bool(checks.get("auto", False))
+        if self.checks_cmd and "{file}" not in self.checks_cmd:
+            raise PackError("[checks] cmd must contain the {file} placeholder")
 
         report = _table(data, "report")
         self.report_title = str(report.get("title", self.title))
         self.recurrence_log = str(report.get("recurrence_log", ""))
+        self.analyze_prompt = str(report.get("analyze_prompt", "")).strip()
         self.sections: List[Dict[str, Any]] = []
         for i, section in enumerate(report.get("sections", [])):
             self.sections.append(self._compile_section(section, i))
@@ -232,11 +283,17 @@ class Pack:
             out["include_speaks"] = bool(raw.get("include_speaks", True))
             out["include_tasks"] = bool(raw.get("include_tasks", True))
             out["include_marks"] = bool(raw.get("include_marks", False))
+            out["include_writes"] = bool(raw.get("include_writes", True))
         elif kind == "watchlist":
             out["scope"] = str(raw.get("scope", "all"))
             if out["scope"] not in ("all", "final"):
                 raise PackError("watchlist scope must be 'all' or 'final'")
             out["patterns"] = [Pattern(p, i) for p in raw.get("patterns", [])]
+            exclude = raw.get("exclude_lines", "")
+            try:
+                out["exclude_lines"] = re.compile(str(exclude)) if exclude else None
+            except re.error as exc:
+                raise PackError("watchlist exclude_lines: %s" % exc) from None
         elif kind == "gaps":
             out["threshold_s"] = float(raw.get("threshold_s", self.idle_threshold_s))
             out["screen_lines"] = int(raw.get("screen_lines", 12))

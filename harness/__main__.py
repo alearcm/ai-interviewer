@@ -38,7 +38,50 @@ def main(argv: Optional[List[str]] = None) -> int:
     reg_p.add_argument("--out", default=None)
     reg_p.add_argument("--stdout", action="store_true")
 
+    web_p = sub.add_parser("web", help="serve the browser front end (localhost/tailnet only)")
+    web_p.add_argument("--host", default=None)
+    web_p.add_argument("--port", type=int, default=None)
+    web_p.add_argument("--packs", default=None, help="packs directory (default: ./packs)")
+    web_p.add_argument("--config", default=None)
+
+    chk_p = sub.add_parser("check", help="run the pack's hidden checks against a finished session")
+    chk_p.add_argument("session_dir")
+    chk_p.add_argument("--config", default=None)
+
+    ana_p = sub.add_parser("analyze", help="deep review of a finished session via the [analyze] model")
+    ana_p.add_argument("session_dir")
+    ana_p.add_argument("--config", default=None)
+    ana_p.add_argument("--out", default=None)
+
     args = parser.parse_args(argv)
+
+    if args.cmd == "web":
+        from .web import WebUnavailable, serve
+
+        try:
+            settings = load_settings(args.config)
+            if args.packs:
+                settings["web"]["packs_dir"] = args.packs
+            serve(settings, host=args.host, port=args.port)
+        except WebUnavailable as exc:
+            print("error: %s" % exc, file=sys.stderr)
+            return 2
+        return 0
+
+    if args.cmd == "check":
+        from .checks import main as check_main
+
+        return check_main([args.session_dir] + (["--config", args.config] if args.config else []))
+
+    if args.cmd == "analyze":
+        from .analyze import main as analyze_main
+
+        argv2 = [args.session_dir]
+        if args.config:
+            argv2 += ["--config", args.config]
+        if args.out:
+            argv2 += ["--out", args.out]
+        return analyze_main(argv2)
 
     if args.cmd == "regrade":
         regrade_argv = [args.session_dir]

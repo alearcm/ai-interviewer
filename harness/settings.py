@@ -25,9 +25,35 @@ DEFAULTS: Dict[str, Any] = {
     "run": {
         "timeout_s": 30.0,
         "output_max_chars": 4000,
+        # "local" executes directly; "container" wraps every run in
+        # docker (no network, bounded cpu/memory) — REQUIRED before
+        # anyone but you can reach the web pane.
+        "backend": "local",
+        "container_image": "",
+        "container_cpus": "1.0",
+        "container_memory": "512m",
     },
     "paths": {
         "sessions_dir": "sessions",
+    },
+    "web": {
+        "host": "127.0.0.1",
+        "port": 8765,
+        "ui_dir": "",       # "" = the webui directory next to this package
+        "packs_dir": "packs",
+        "max_live": 8,      # concurrent live sessions the manager allows
+    },
+    # The deep-review model for `analyze` — deliberately separate from
+    # [model]: the live interviewer stays small/local, the post-session
+    # read wants the strongest model you have a key for.
+    "analyze": {
+        "provider": "anthropic",
+        "base_url": "",
+        "name": "claude-sonnet-5",
+        "api_key_env": "",  # anthropic default: ANTHROPIC_API_KEY
+        "temperature": 0.3,
+        "max_tokens": 4000,
+        "timeout_s": 240.0,
     },
 }
 

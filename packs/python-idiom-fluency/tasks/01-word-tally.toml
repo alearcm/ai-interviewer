@@ -2,6 +2,14 @@
 id = "word-tally"
 title = "Word tally"
 tags = ["counting", "dict-and-set"]
+focus = ["counting-by-hand", "manual-best-scan", "membership-branch"]
+check = '''
+assert top_words("a b a c a b", 2) == [("a", 3), ("b", 2)]
+assert top_words("z y x", 2) == [("x", 1), ("y", 1)]
+assert top_words("The the THE cat", 1) == [("the", 3)]
+assert top_words("dog, dog! cat", 2) == [("dog", 2), ("cat", 1)]
+assert top_words("", 3) == []
+'''
 
 statement = '''
 In solution.py, write:

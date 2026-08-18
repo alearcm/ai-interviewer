@@ -26,6 +26,15 @@ IDLE = "idle"
 CLOCK_MARK = "clock_mark"
 NOTE = "note"
 SESSION_END = "session_end"
+# A debounced "the candidate is typing in PATH" signal from a front end
+# that can see edits before they are saved (the browser editor). Carries
+# timing and a size delta, never content — content arrives via saves.
+EDIT_PULSE = "edit_pulse"
+# The ENGINE wrote into the workspace on the interviewer's behalf: a
+# task's seed files at presentation, or a rule-gated write (a marked
+# comment line, a pasted check). Always attributed — these lines are
+# never the candidate's, and reports must not treat them as such.
+PAD_WRITE = "pad_write"
 
 ALL_KINDS = frozenset(
     {
@@ -41,6 +50,8 @@ ALL_KINDS = frozenset(
         CLOCK_MARK,
         NOTE,
         SESSION_END,
+        EDIT_PULSE,
+        PAD_WRITE,
     }
 )
 
@@ -58,7 +69,8 @@ WAKE_KINDS = frozenset(
 )
 
 # Kinds that count as candidate activity (they reset the idle timer).
-ACTIVITY_KINDS = frozenset({FILE_SAVED, RUN_EXECUTED, USER_MESSAGE})
+# Edit pulses count: visible typing is not idleness, even unsaved.
+ACTIVITY_KINDS = frozenset({FILE_SAVED, RUN_EXECUTED, USER_MESSAGE, EDIT_PULSE})
 
 
 def iso_now() -> str:

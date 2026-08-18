@@ -186,12 +186,20 @@ class WorkspaceWatch:
             )
         self._observer = Observer()
         self._observer.daemon = True
-        handler = _SaveHandler(
+        self._save_handler = _SaveHandler(
             workspace, debounce_ms / 1000.0, snapshot_max_bytes, ignore_globs, emit
         )
-        self._observer.schedule(handler, workspace, recursive=True)
+        self._observer.schedule(self._save_handler, workspace, recursive=True)
         if spool:
             self._observer.schedule(_SpoolHandler(spool, emit), spool, recursive=True)
+
+    def register_content(self, rel: str, raw: bytes) -> None:
+        """Pre-register content the ENGINE is about to write, so the
+        resulting change is not re-emitted as a candidate save. Hash
+        exactly what a snapshot would hash: the truncated prefix."""
+        digest = hashlib.sha256(raw[: self._save_handler.max_bytes]).hexdigest()
+        with self._save_handler._lock:
+            self._save_handler._hashes[rel.replace(os.sep, "/")] = digest
 
     def start(self) -> None:
         self._observer.start()

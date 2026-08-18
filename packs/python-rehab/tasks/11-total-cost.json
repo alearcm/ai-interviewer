@@ -1,0 +1,18 @@
+{
+  "task": {
+    "id": "total-cost",
+    "title": "order total",
+    "tags": [
+      "unpacking",
+      "sum"
+    ],
+    "statement": "This function totals an order given as (quantity, unit_price) pairs. It loops over indices and digs into each pair with [0] and [1] instead of using Python's iteration and unpacking.\n\n    def total_cost(order):\n        total = 0\n        for i in range(len(order)):\n            item = order[i]\n            total = total + item[0] * item[1]\n        return total\n\nRewrite it idiomatically in solution.py; same name, same behavior.",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: index-loop, pair-not-unpacked.",
+    "appendix": "Targets: index-loop, pair-not-unpacked\n\nHidden checks (behavior must be preserved):\nassert total_cost([(2, 3), (1, 10)]) == 16\nassert total_cost([]) == 0\nassert total_cost([(3, 0.5)]) == 1.5\nassert total_cost([(1, 100), (0, 999), (4, 25)]) == 200\n\nIdiomatic reference:\ndef total_cost(order):\n    return sum(qty * price for qty, price in order)\n",
+    "focus": [
+      "index-loop",
+      "pair-not-unpacked"
+    ],
+    "check": "assert total_cost([(2, 3), (1, 10)]) == 16\nassert total_cost([]) == 0\nassert total_cost([(3, 0.5)]) == 1.5\nassert total_cost([(1, 100), (0, 999), (4, 25)]) == 200"
+  }
+}

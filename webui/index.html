@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>interview harness</title>
+<link rel="stylesheet" href="/ui/vendor/codemirror.min.css">
+<link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+<div id="landing" class="view">
+  <h1>interview harness</h1>
+  <div class="card">
+    <h2>new session</h2>
+    <label>pack <select id="pack-select"></select></label>
+    <label>minutes <input id="minutes" type="number" step="1" min="1" placeholder="pack default"></label>
+    <label>task <select id="task-select"><option value="">random / pack order</option></select></label>
+    <label>model <select id="provider">
+      <option value="">configured default</option>
+      <option value="canned">canned (no model)</option>
+    </select></label>
+    <button id="start">start session</button>
+    <div id="start-error" class="error"></div>
+  </div>
+  <div class="card">
+    <h2>sessions</h2>
+    <div id="session-list">loading…</div>
+  </div>
+</div>
+
+<div id="session" class="view hidden">
+  <header>
+    <span id="s-title"></span>
+    <span id="clock">--:--</span>
+    <span class="spacer"></span>
+    <button id="btn-voice" class="ghost" title="speak interviewer lines aloud">voice: off</button>
+    <button id="btn-next" title="next task">next task</button>
+    <button id="btn-end" class="danger" title="end session">end</button>
+    <a id="btn-report" class="hidden" target="_blank">report</a>
+    <a href="/" id="btn-home">home</a>
+  </header>
+  <main id="split">
+    <section id="left">
+      <div id="task-panel" class="task-panel"></div>
+      <div id="log"></div>
+      <form id="say-form">
+        <input id="say" autocomplete="off" placeholder="talk to the interviewer… (narrate!)">
+        <button id="btn-mic" type="button" class="ghost hidden" title="dictate">mic</button>
+        <button>send</button>
+      </form>
+    </section>
+    <section id="right" class="hidden">
+      <div id="editor-bar">
+        <span id="filename" class="mono"></span>
+        <span id="save-state" class="dim"></span>
+        <span class="spacer"></span>
+        <input id="run-cmd" class="mono" spellcheck="false">
+        <button id="btn-run">run</button>
+      </div>
+      <div id="editor-host"></div>
+    </section>
+  </main>
+  <div id="banner" class="hidden"></div>
+</div>
+
+<script src="/ui/vendor/codemirror.min.js"></script>
+<script src="/ui/vendor/cm-lang.min.js"></script>
+<script src="/ui/app.js"></script>
+</body>
+</html>

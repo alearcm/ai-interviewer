@@ -89,6 +89,16 @@ prompt = "They have gone quiet mid-answer. Demand they continue or commit to an 
 
 [report]
 title = "Verbal drill — conclusion-first check"
+analyze_prompt = '''
+You are reviewing the transcript of a rapid verbal scenario drill whose
+single training goal is: lead with the conclusion. For every answer the
+candidate gave, quote the first sentence and classify it — conclusion,
+hedge, wind-up, or question-dodge. Then: (1) their buried-conclusion
+rate; (2) their three worst openers, rewritten the way they should have
+opened; (3) whether their answers got tighter or looser under the
+interviewer's pushing; (4) one sentence of advice they should read
+before the next drill. Be blunt. Quote verbatim with offsets.
+'''
 
 [[report.sections]]
 type = "openers"

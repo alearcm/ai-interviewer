@@ -9,6 +9,7 @@ title = "Python fluency under observation"
 [session]
 minutes = 45
 workspace = true
+primary_file = "solution.py"
 # "Stuck" threshold: an idle wake fires only after this long with no
 # save, no run and no message. Also the report's stall threshold.
 idle_threshold_s = 150
@@ -71,7 +72,12 @@ ladder = [
 
 [tasks]
 dir = "tasks"
-order = "shuffle"
+order = "recurrence"   # repeat offenders (per the recurrence log) come back first
+
+[checks]
+file = "solution.py"
+cmd = "python3 {file}"
+auto = true
 
 # --- wake rules: default is STAY SILENT; nothing below, nothing said ---
 
@@ -130,6 +136,33 @@ prompt = "State that five minutes remain. Nothing else."
 [report]
 title = "Python fluency session — raw evidence"
 recurrence_log = "recurrence-python-idiom-fluency.tsv"
+analyze_prompt = '''
+You are reviewing the full transcript of a timed Python fluency session:
+a strong competitive programmer (senior engineer, rusty Python) solving
+an easy-to-medium problem in 45 minutes under a deliberately silent
+observer. Algorithms are NOT the gap; Java-shaped Python under a clock
+is. The transcript has every save (full file contents), every run with
+output, everything said, idle wakes, and the interviewer's gate log.
+
+Produce a direct review in Markdown:
+1. Narrative: how the session actually went, in two paragraphs.
+2. Idiom audit: walk the snapshots chronologically; for every
+   Java-shaped construct (hand-rolled counting, membership branches,
+   range(len()), manual best-scans, string += loops, .keys(),
+   unindexed pair access, missing slices/comprehensions/unpacking),
+   quote the line, give the fluent replacement, and note whether they
+   fixed it themselves later.
+3. Clock behavior: where the time actually went; every stall over two
+   minutes with what was on screen; whether they ran early and often
+   or batched risk.
+4. Ambiguity discipline: which planted ambiguities they probed, which
+   they silently assumed, and whether any assumption cost them.
+5. Narration: what their spoken commentary revealed vs what they typed.
+6. Next three sessions: a prioritized drill list keyed to the
+   recurrence patterns above.
+Quote evidence verbatim with minute offsets. No scores, no praise
+padding, no hedging.
+'''
 
 [[report.sections]]
 type = "header"
