@@ -1,14 +1,22 @@
-# Engine settings. Every key is optional; these are also the defaults.
-# The default endpoint is a local Ollama server — no API key needed.
+# Engine settings. Every key is optional.
+# Active setup: Gemini free tier via Google's OpenAI-compatible
+# endpoint. Put the key in the environment (never in this file):
+#   export GEMINI_API_KEY=...
+# With the env var unset, sessions still run on pack fallback lines.
 
 [model]
 provider = "openai-compat"          # openai-compat | anthropic | canned
-base_url = "http://127.0.0.1:11434/v1"
-name = "qwen3:4b-instruct-2507-q4_K_M"
-api_key_env = ""                    # name of an env var holding a key, if your endpoint wants one
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+name = "gemini-3.5-flash-lite"
+api_key_env = "GEMINI_API_KEY"
 temperature = 0.4
 max_tokens = 160
 timeout_s = 60
+
+# Local, keyless alternative (Ollama):
+#   base_url = "http://127.0.0.1:11434/v1"
+#   name = "qwen3:4b-instruct-2507-q4_K_M"
+#   api_key_env = ""
 
 # LM Studio:   base_url = "http://127.0.0.1:1234/v1"
 # llama.cpp:   base_url = "http://127.0.0.1:8080/v1"
@@ -20,13 +28,16 @@ timeout_s = 60
 # Anthropic:   provider = "anthropic", name = "claude-haiku-4-5-20251001",
 #              api_key_env = "ANTHROPIC_API_KEY"
 
-# Deep post-session review (`python -m harness analyze`): a separate,
-# stronger model than the live interviewer. Needs a key; without one,
-# analyze writes the full request to a file for manual pasting.
+# Deep post-session review (`python -m harness analyze`). Currently the
+# same free-tier Gemini model; point it at something stronger when you
+# have a key for one (e.g. provider = "anthropic", name =
+# "claude-sonnet-5", key in ANTHROPIC_API_KEY).
 [analyze]
-provider = "anthropic"
-name = "claude-sonnet-5"
-# api_key_env defaults to ANTHROPIC_API_KEY for the anthropic provider
+provider = "openai-compat"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+name = "gemini-3.5-flash-lite"
+api_key_env = "GEMINI_API_KEY"
+max_tokens = 3000
 
 [run]
 timeout_s = 30                      # /run and self-check timeout (irun runs

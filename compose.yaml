@@ -19,6 +19,7 @@ services:
       - ./config.toml:/app/config.toml:ro
     environment:
       # forwarded so config.toml's api_key_env names resolve in-container
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}

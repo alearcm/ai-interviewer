@@ -164,11 +164,19 @@ Notes for the friends stage:
 
 ## Hosted-model presets
 
-The default config never needs a key. To use one, set `[model]` (live
-interviewer — small and cheap is right) and/or `[analyze]` (one call
-per session — strongest model you have):
+Set `[model]` (live interviewer — small and cheap is right) and/or
+`[analyze]` (one call per session — strongest model you have):
 
 ```toml
+# Gemini free tier (Google's OpenAI-compatible endpoint) — the active
+# default in config.toml; free-tier rate limits are far above what a
+# session needs (a handful of calls per minute at most)
+[model]
+provider = "openai-compat"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+name = "gemini-3.5-flash-lite"
+api_key_env = "GEMINI_API_KEY"
+
 # OpenRouter (any OpenAI-compatible small model, ~a penny/session)
 [model]
 provider = "openai-compat"
@@ -191,4 +199,6 @@ name = "claude-sonnet-5"        # ANTHROPIC_API_KEY
 ```
 
 Export the key in the environment that runs the server (compose
-forwards `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`).
+forwards `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`,
+`GROQ_API_KEY`). Never commit a key: `.env` is git-ignored, and
+`config.toml` only ever names the env var.
