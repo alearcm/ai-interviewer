@@ -38,10 +38,71 @@ or point `[model]` at a hosted key — presets below.
 
 ## Stage 2 — always-on VPS
 
-Same as stage 1 on any small VPS (2 vCPU / 4 GB is plenty without
-local inference; 8 GB if you want Ollama on-box). Join it to your
-tailnet and keep the port un-exposed publicly. All state lives in the
-repo directory (`sessions/`); back it up with rsync.
+Any small VPS works (1 GB RAM is enough without local inference — the
+server idles under ~100 MB; 8 GB if you want Ollama on-box). Join it
+to your tailnet and keep the port un-exposed publicly.
+
+Bootstrap on a fresh Debian/Ubuntu box:
+
+```sh
+# as root, once
+apt update && apt install -y git python3-venv curl
+curl -fsSL https://tailscale.com/install.sh | sh && tailscale up
+
+useradd -m harness && su - harness
+git clone https://github.com/<you>/ai-interviewer && cd ai-interviewer
+python3 -m venv .venv && ./.venv/bin/pip install -e ".[ui]"
+# put your model key in the environment (see presets below), then:
+./.venv/bin/harness web --host 0.0.0.0   # tailnet-only: no public port open
+```
+
+Run it as a service — `/etc/systemd/system/harness-web.service`:
+
+```ini
+[Unit]
+Description=interview harness web pane
+After=network-online.target tailscaled.service
+
+[Service]
+User=harness
+WorkingDirectory=/home/harness/ai-interviewer
+Environment=OPENROUTER_API_KEY=...
+Environment=ANTHROPIC_API_KEY=...
+ExecStart=/home/harness/ai-interviewer/.venv/bin/harness web --host 0.0.0.0
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`systemctl enable --now harness-web`. (`WorkingDirectory` matters: the
+repo directory is where `config.toml`, `packs/`, `webui/` and
+`sessions/` resolve.)
+
+Back up the only state that matters with a nightly cron:
+
+```sh
+0 3 * * * rsync -a /home/harness/ai-interviewer/sessions/ backup-host:harness-sessions/
+```
+
+## Migrating hosts
+
+All durable state is the repo directory — specifically `sessions/`
+(transcripts, reports, the recurrence log) plus your `config.toml`.
+Moving machines is:
+
+```sh
+rsync -a old-host:ai-interviewer/sessions/ ai-interviewer/sessions/
+scp old-host:ai-interviewer/config.toml ai-interviewer/
+```
+
+Transcripts are self-contained (each embeds its full pack), so a
+session directory copied to any path on any machine regrades
+byte-identically — `tests/test_portability.py` enforces this. Nothing
+stores absolute paths; the recurrence log travels inside `sessions/`
+and recurrence-weighted ordering picks up where it left off. ARM boxes
+(Hetzner CAX, Oracle A1) work: the stack is pure Python, watchdog and
+aiohttp ship aarch64 wheels, and the docker base image is multi-arch.
 
 ## Stage 3 — friends (auth + sandboxing)
 

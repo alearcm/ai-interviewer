@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-interviewer"
+version = "0.2.0"
+description = "Timed, observed, adversarial interview practice: generic engine + scenario packs"
+requires-python = ">=3.11"
+dependencies = [
+    "watchdog>=4.0",
+    "aiohttp>=3.9",
+]
+
+[project.optional-dependencies]
+ui = ["prompt_toolkit>=3.0"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+# Install with `pip install -e .` from the repo clone (editable install:
+# the webui/ and packs/ directories next to the package keep resolving),
+# then `harness web`, `harness run ...`, `harness regrade ...` work as
+# commands.
+harness = "harness.__main__:main"
+
+[tool.setuptools]
+packages = ["harness"]
