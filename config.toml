@@ -10,15 +10,37 @@ temperature = 0.4
 max_tokens = 160
 timeout_s = 60
 
-# LM Studio:  base_url = "http://127.0.0.1:1234/v1"
-# llama.cpp:  base_url = "http://127.0.0.1:8080/v1"
-# vLLM:       base_url = "http://127.0.0.1:8000/v1"
-# Anthropic:  provider = "anthropic", name = "claude-haiku-4-5-20251001",
-#             api_key_env = "ANTHROPIC_API_KEY"
+# LM Studio:   base_url = "http://127.0.0.1:1234/v1"
+# llama.cpp:   base_url = "http://127.0.0.1:8080/v1"
+# vLLM:        base_url = "http://127.0.0.1:8000/v1"
+# OpenRouter:  base_url = "https://openrouter.ai/api/v1",
+#              name = "qwen/qwen3-32b", api_key_env = "OPENROUTER_API_KEY"
+# Groq:        base_url = "https://api.groq.com/openai/v1",
+#              name = "llama-3.3-70b-versatile", api_key_env = "GROQ_API_KEY"
+# Anthropic:   provider = "anthropic", name = "claude-haiku-4-5-20251001",
+#              api_key_env = "ANTHROPIC_API_KEY"
+
+# Deep post-session review (`python -m harness analyze`): a separate,
+# stronger model than the live interviewer. Needs a key; without one,
+# analyze writes the full request to a file for manual pasting.
+[analyze]
+provider = "anthropic"
+name = "claude-sonnet-5"
+# api_key_env defaults to ANTHROPIC_API_KEY for the anthropic provider
 
 [run]
 timeout_s = 30                      # /run and irun command timeout
 output_max_chars = 4000
+backend = "local"                   # "container" sandboxes every run via docker
+                                    # (REQUIRED before sharing the web pane; see docs/DEPLOY.md)
+# container_image = "python:3.12-slim"
+# container_cpus = "1.0"
+# container_memory = "512m"
+
+[web]
+host = "127.0.0.1"                  # 0.0.0.0 to serve your tailnet (never the open internet)
+port = 8765
+max_live = 8
 
 [paths]
 sessions_dir = "sessions"

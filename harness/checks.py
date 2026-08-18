@@ -20,7 +20,7 @@ from typing import Any, Dict, List
 
 from . import events
 from .pack import Pack
-from .runner import execute
+from .runner import run_command
 
 
 def run_for_session(rows: List[Dict[str, Any]], pack: Pack, run_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -47,12 +47,7 @@ def run_for_session(rows: List[Dict[str, Any]], pack: Pack, run_cfg: Dict[str, A
             name = os.path.basename(pack.checks_file)
             with open(os.path.join(tmp, name), "w", encoding="utf-8") as fh:
                 fh.write(snapshot.rstrip("\n") + "\n\n" + check.strip() + "\n")
-            res = execute(
-                pack.checks_cmd.replace("{file}", name),
-                tmp,
-                timeout_s=float(run_cfg.get("timeout_s", 30.0)),
-                output_max_chars=int(run_cfg.get("output_max_chars", 4000)),
-            )
+            res = run_command(pack.checks_cmd.replace("{file}", name), tmp, run_cfg)
         ok = res["exit_status"] == 0
         tail = (res["err"] or res["out"] or "").strip()
         results.append({**base, "status": "ok" if ok else "failing", "out": "" if ok else tail[-1500:]})

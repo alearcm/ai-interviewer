@@ -25,6 +25,13 @@ DEFAULTS: Dict[str, Any] = {
     "run": {
         "timeout_s": 30.0,
         "output_max_chars": 4000,
+        # "local" executes directly; "container" wraps every run in
+        # docker (no network, bounded cpu/memory) — REQUIRED before
+        # anyone but you can reach the web pane.
+        "backend": "local",
+        "container_image": "",
+        "container_cpus": "1.0",
+        "container_memory": "512m",
     },
     "paths": {
         "sessions_dir": "sessions",
@@ -34,6 +41,7 @@ DEFAULTS: Dict[str, Any] = {
         "port": 8765,
         "ui_dir": "",       # "" = the webui directory next to this package
         "packs_dir": "packs",
+        "max_live": 8,      # concurrent live sessions the manager allows
     },
     # The deep-review model for `analyze` — deliberately separate from
     # [model]: the live interviewer stays small/local, the post-session

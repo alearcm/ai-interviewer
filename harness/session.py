@@ -30,7 +30,7 @@ from .gate import Gate
 from .facts import NEVER
 from .pack import Pack
 from .phrasing import build_call, shape_reply
-from .runner import execute
+from .runner import run_command
 from .watcher import WorkspaceWatch
 
 def help_text(has_workspace: bool) -> str:
@@ -297,13 +297,7 @@ class Session:
             elif not cmd:
                 self.pane.notice("usage: /run CMD")
             else:
-                row = execute(
-                    cmd,
-                    self.workspace,
-                    timeout_s=float(self.settings["run"]["timeout_s"]),
-                    output_max_chars=int(self.settings["run"]["output_max_chars"]),
-                )
-                self._q.put(row)
+                self._q.put(run_command(cmd, self.workspace, self.settings["run"]))
         elif line.startswith("/"):
             self.pane.notice("unknown command; %s" % help_text(self.workspace is not None))
         else:

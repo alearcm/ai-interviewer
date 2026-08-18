@@ -158,6 +158,12 @@ class Manager:
         task_id: Optional[str] = None,
         provider: Optional[str] = None,
     ) -> Handle:
+        running = sum(1 for h in self.live.values() if not h.session.is_over())
+        limit = int(self.settings["web"].get("max_live", 8))
+        if running >= limit:
+            raise RuntimeError(
+                "session limit reached (%d live); end one first" % running
+            )
         safe = os.path.basename(str(pack_name))
         pack = load_pack(os.path.join(self.packs_dir, safe))
         model_cfg = dict(self.settings["model"])
@@ -271,6 +277,12 @@ def build_app(settings: Dict[str, Any]) -> Any:
         with open(path, "r", encoding="utf-8") as fh:
             return web.Response(text=fh.read(), content_type="text/plain", charset="utf-8")
 
+    async def api_end(request: Any) -> Any:
+        handle = _get_handle(request)
+        if not handle.session.is_over():
+            handle.session.submit_line("/end")
+        return web.json_response({"ok": True})
+
     async def api_checks(request: Any) -> Any:
         handle = _get_handle(request)
         from . import checks as checks_mod
@@ -378,6 +390,7 @@ def build_app(settings: Dict[str, Any]) -> Any:
     app.router.add_get("/api/sessions/{sid}", api_meta)
     app.router.add_get("/api/sessions/{sid}/report", api_report)
     app.router.add_post("/api/sessions/{sid}/checks", api_checks)
+    app.router.add_post("/api/sessions/{sid}/end", api_end)
     app.router.add_get("/api/sessions/{sid}/file", api_file_get)
     app.router.add_put("/api/sessions/{sid}/file", api_file_put)
     app.router.add_get("/api/sessions/{sid}/ws", ws_handler)
