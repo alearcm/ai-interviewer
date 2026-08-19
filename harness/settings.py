@@ -42,6 +42,11 @@ DEFAULTS: Dict[str, Any] = {
         "ui_dir": "",       # "" = the webui directory next to this package
         "packs_dir": "packs",
         "max_live": 8,      # concurrent live sessions the manager allows
+        # If the named env var (or `password`) is set, the pane requires
+        # a one-time login per device: a long-lived cookie remembers it.
+        # Empty = no auth (localhost/tailnet use).
+        "password_env": "HARNESS_PASSWORD",
+        "password": "",
     },
     # The deep-review model for `analyze` — deliberately separate from
     # [model]: the live interviewer stays small/local, the post-session

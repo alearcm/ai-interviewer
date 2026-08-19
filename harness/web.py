@@ -19,6 +19,8 @@ edit pulses for typing-cadence timing.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import os
 import threading
@@ -40,6 +42,31 @@ from .session import Session
 # resume arithmetic stays exact). The pack snapshot is large and clients
 # have no use for it live.
 _STUB_KINDS = {events.PACK_SNAPSHOT}
+
+_AUTH_COOKIE = "harness_auth"
+_AUTH_MAX_AGE = 180 * 24 * 3600  # one login per device per ~6 months
+
+_LOGIN_HTML = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>log in</title>
+<style>
+body { background:#11141a; color:#dbe2ea; font:16px system-ui, sans-serif;
+       display:flex; align-items:center; justify-content:center; height:100dvh; margin:0; }
+form { background:#1a1f27; padding:2rem; border-radius:12px; display:flex;
+       flex-direction:column; gap:.9rem; min-width:16rem; }
+input { background:#202733; color:#dbe2ea; border:1px solid #303a48;
+        border-radius:8px; padding:.6rem .8rem; font-size:1rem; }
+button { background:#6ea8fe; color:#0b1220; border:0; border-radius:8px;
+         padding:.6rem; font-weight:600; font-size:1rem; }
+.err { color:#e05d5d; min-height:1.2em; font-size:.9rem; }
+</style></head><body>
+<form method="post" action="/login">
+  <strong>interview harness</strong>
+  <input type="password" name="password" placeholder="password" autofocus autocomplete="current-password">
+  <button>log in</button>
+  <div class="err">%s</div>
+</form></body></html>"""
 
 
 class WebUnavailable(RuntimeError):
@@ -116,6 +143,7 @@ class Handle:
             "now_t": session.offset(),
             "has_workspace": session.workspace is not None,
             "primary_file": session.pack.primary_file,
+            "run_cmd": session.pack.run_cmd,
         }
 
 
@@ -229,7 +257,58 @@ def build_app(settings: Dict[str, Any]) -> Any:
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui"
     )
 
-    app = web.Application()
+    # Optional one-password login. When configured, every route except
+    # /login requires the long-lived cookie; WS upgrades included
+    # (browsers send cookies on the upgrade request).
+    password_env = str(settings["web"].get("password_env", "") or "")
+    password = os.environ.get(password_env, "") if password_env else ""
+    password = password or str(settings["web"].get("password", ""))
+    cookie_value = (
+        hashlib.sha256(bytes("pane-auth:" + password, "utf-8")).hexdigest()
+        if password
+        else None
+    )
+
+    @web.middleware
+    async def auth_middleware(request: Any, handler: Any) -> Any:
+        if cookie_value is None or request.path == "/login":
+            return await handler(request)
+        given = request.cookies.get(_AUTH_COOKIE, "")
+        if given and hmac.compare_digest(given, cookie_value):
+            return await handler(request)
+        if request.path.startswith("/api/"):
+            raise web.HTTPUnauthorized(text="login required")
+        raise web.HTTPFound("/login")
+
+    app = web.Application(middlewares=[auth_middleware])
+
+    async def login_get(request: Any) -> Any:
+        if cookie_value is None:
+            raise web.HTTPFound("/")
+        return web.Response(text=_LOGIN_HTML % "", content_type="text/html")
+
+    async def login_post(request: Any) -> Any:
+        if cookie_value is None:
+            raise web.HTTPFound("/")
+        form = await request.post()
+        given = str(form.get("password", ""))
+        if not hmac.compare_digest(given, password):
+            return web.Response(
+                text=_LOGIN_HTML % "wrong password", content_type="text/html", status=401
+            )
+        response = web.HTTPFound("/")
+        response.set_cookie(
+            _AUTH_COOKIE,
+            cookie_value,
+            max_age=_AUTH_MAX_AGE,
+            httponly=True,
+            samesite="Lax",
+            secure=request.headers.get("X-Forwarded-Proto", "") == "https",
+        )
+        return response
+
+    app.router.add_get("/login", login_get)
+    app.router.add_post("/login", login_post)
 
     async def index(request: Any) -> Any:
         path = os.path.join(ui_dir, "index.html")

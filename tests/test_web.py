@@ -23,6 +23,7 @@ title = "Web workspace mini"
 minutes = 0.5
 workspace = true
 primary_file = "answer.txt"
+run_cmd = "printf default-run"
 idle_threshold_s = 30
 debounce_ms = 150
 
@@ -60,7 +61,7 @@ statement = "Type things."
 
 MINI_VERBAL_PACK = MINI_WORKSPACE_PACK.replace('name = "webw"', 'name = "webv"').replace(
     "workspace = true", "workspace = false"
-).replace('primary_file = "answer.txt"\n', "")
+).replace('primary_file = "answer.txt"\n', "").replace('run_cmd = "printf default-run"\n', "")
 
 
 def make_env(tmp_path):
@@ -127,6 +128,7 @@ async def scenario(tmp_path):
         meta = await res.json()
         sid = meta["id"]
         assert meta["has_workspace"] and meta["primary_file"] == "answer.txt"
+        assert meta["run_cmd"] == "printf default-run"  # run button needs no typing
 
         ws = await client.ws_connect(f"/api/sessions/{sid}/ws?resume=0")
         bag = await recv_rows(ws, lambda b: b["hello"] is not None and "task_presented" in kinds(b), stage="hello")
@@ -190,3 +192,46 @@ async def scenario(tmp_path):
 
 def test_web_pane_end_to_end(tmp_path):
     asyncio.run(scenario(tmp_path))
+
+
+async def auth_scenario(tmp_path):
+    settings = make_env(tmp_path)
+    settings["web"]["password_env"] = "TEST_PANE_PW"
+    os.environ["TEST_PANE_PW"] = "open sesame"
+    try:
+        app = build_app(settings)
+        client = TestClient(TestServer(app))
+        await client.start_server()
+        try:
+            # everything is locked without the cookie
+            assert (await client.get("/api/packs")).status == 401
+            page = await client.get("/", allow_redirects=False)
+            assert page.status == 302 and page.headers["Location"] == "/login"
+
+            # wrong password refused
+            bad = await client.post("/login", data={"password": "nope"})
+            assert bad.status == 401
+
+            # right password sets the long-lived cookie; everything opens
+            ok = await client.post("/login", data={"password": "open sesame"},
+                                   allow_redirects=False)
+            assert ok.status == 302
+            cookie = ok.cookies.get("harness_auth")
+            assert cookie is not None and int(cookie["max-age"]) >= 90 * 24 * 3600
+            assert (await client.get("/api/packs")).status == 200
+
+            # the WS upgrade rides the same cookie
+            res = await client.post("/api/sessions", json={"pack": "webv"})
+            sid = (await res.json())["id"]
+            ws = await client.ws_connect(f"/api/sessions/{sid}/ws?resume=0")
+            await ws.send_json({"command": "/end"})
+            await recv_rows(ws, lambda b: "session_end" in kinds(b), stage="auth-end")
+            await ws.close()
+        finally:
+            await client.close()
+    finally:
+        os.environ.pop("TEST_PANE_PW", None)
+
+
+def test_login_gate_and_device_cookie(tmp_path):
+    asyncio.run(auth_scenario(tmp_path))
