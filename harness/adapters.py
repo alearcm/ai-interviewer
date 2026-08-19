@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
@@ -32,32 +34,67 @@ class Adapter:
         raise NotImplementedError
 
 
-def _post_json(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout_s: float) -> Dict[str, Any]:
+_RETRY_IN_RX = re.compile(r"try again in ([0-9.]+)s", re.IGNORECASE)
+
+
+def _suggested_wait(exc: Any, detail: str) -> float:
+    """How long a 429 asks us to wait: Retry-After header, or the
+    'try again in Ns' phrasing hosted free tiers put in the body."""
+    header = ""
+    try:
+        header = exc.headers.get("Retry-After", "") or ""
+    except Exception:
+        pass
+    if header.strip().replace(".", "", 1).isdigit():
+        return float(header.strip())
+    match = _RETRY_IN_RX.search(detail)
+    if match:
+        return float(match.group(1))
+    return 15.0
+
+
+def _post_json(
+    url: str,
+    payload: Dict[str, Any],
+    headers: Dict[str, str],
+    timeout_s: float,
+    rate_limit_wait_s: float = 0.0,
+) -> Dict[str, Any]:
     body = bytes(json.dumps(payload), "utf-8")
-    request = urllib.request.Request(url, data=body, method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Accept", "application/json")
-    # the default urllib signature trips WAF/bot filters (Cloudflare
-    # "error 1010") in front of some hosted endpoints
-    request.add_header("User-Agent", "interview-harness/0.2")
-    for key, value in headers.items():
-        request.add_header(key, value)
-    try:
-        with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            raw = response.read()
-    except urllib.error.HTTPError as exc:
-        detail = ""
+    attempts = 0
+    while True:
+        request = urllib.request.Request(url, data=body, method="POST")
+        request.add_header("Content-Type", "application/json")
+        request.add_header("Accept", "application/json")
+        # the default urllib signature trips WAF/bot filters (Cloudflare
+        # "error 1010") in front of some hosted endpoints
+        request.add_header("User-Agent", "interview-harness/0.2")
+        for key, value in headers.items():
+            request.add_header(key, value)
         try:
-            detail = str(exc.read()[:400], "utf-8", "replace")
-        except Exception:
-            pass
-        raise AdapterError("endpoint refused the request (%s): %s" % (exc, detail)) from None
-    except (urllib.error.URLError, OSError) as exc:
-        raise AdapterError("endpoint unreachable at %s: %s" % (url, exc)) from None
-    try:
-        return json.loads(str(raw, "utf-8"))
-    except ValueError as exc:
-        raise AdapterError("endpoint returned non-JSON: %s" % exc) from None
+            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+                raw = response.read()
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = str(exc.read()[:400], "utf-8", "replace")
+            except Exception:
+                pass
+            # free-tier per-minute limits are routine, not fatal: wait
+            # out a 429 when the suggested pause fits our patience
+            if exc.status == 429 and attempts < 2:
+                wait = _suggested_wait(exc, detail)
+                if wait <= rate_limit_wait_s:
+                    attempts += 1
+                    time.sleep(wait + 0.5)
+                    continue
+            raise AdapterError("endpoint refused the request (%s): %s" % (exc, detail)) from None
+        except (urllib.error.URLError, OSError) as exc:
+            raise AdapterError("endpoint unreachable at %s: %s" % (url, exc)) from None
+        try:
+            return json.loads(str(raw, "utf-8"))
+        except ValueError as exc:
+            raise AdapterError("endpoint returned non-JSON: %s" % exc) from None
 
 
 class OpenAICompat(Adapter):
@@ -81,7 +118,10 @@ class OpenAICompat(Adapter):
         key = os.environ.get(key_env, "") if key_env else ""
         if key:
             headers["Authorization"] = "Bearer " + key
-        data = _post_json(url, payload, headers, float(cfg.get("timeout_s", 60.0)))
+        data = _post_json(
+            url, payload, headers, float(cfg.get("timeout_s", 60.0)),
+            rate_limit_wait_s=float(cfg.get("rate_limit_wait_s", 30.0)),
+        )
         try:
             text = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
@@ -115,7 +155,10 @@ class Anthropic(Adapter):
             "max_tokens": cfg.get("max_tokens", 160),
         }
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
-        data = _post_json(base + "/v1/messages", payload, headers, float(cfg.get("timeout_s", 60.0)))
+        data = _post_json(
+            base + "/v1/messages", payload, headers, float(cfg.get("timeout_s", 60.0)),
+            rate_limit_wait_s=float(cfg.get("rate_limit_wait_s", 30.0)),
+        )
         try:
             parts = [p.get("text", "") for p in data["content"] if p.get("type") == "text"]
         except (KeyError, TypeError):

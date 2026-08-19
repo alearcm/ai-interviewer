@@ -16,17 +16,28 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Unclosed think/fence blocks (a reply truncated mid-generation) are
 # stripped to end-of-text: dropping tail content beats leaking it.
+# A fence only counts when its ``` starts a line — an inline stray
+# triple-backtick in prose is a marker to drop, not a block to gut.
 _THINK_RX = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL)
-_FENCE_RX = re.compile(r"```.*?(?:```|$)", re.DOTALL)
+_FENCE_RX = re.compile(r"^[ \t]*```.*?(?:```|\Z)", re.DOTALL | re.MULTILINE)
 _LABEL_RX = re.compile(r"^\s*(interviewer|assistant|me|reply|response)\s*:\s*", re.IGNORECASE)
-# A sentence ends at terminal punctuation followed by whitespace, or by
-# an immediate capital letter ("Superb!You…" is two sentences, "3.5" one).
-_SENTENCE_END_RX = re.compile(r"(?<=[.!?])(?:\s+|(?=[A-Z]))")
+# A sentence ends at terminal punctuation followed by whitespace, or at
+# !/? glued to a capital ("Superb!You…"). A period glued to a capital is
+# NOT a boundary — dotted names like pathlib.Path must survive whole.
+_SENTENCE_END_RX = re.compile(r"(?<=[.!?])\s+|(?<=[!?])(?=[A-Z])")
+# Fragments that end mid-abbreviation are glue points, not sentence ends.
+_ABBREV_TAIL_RX = re.compile(r"(?:^|\s)(?:e\.g\.|i\.e\.|etc\.|vs\.|cf\.|[0-9]{1,2}\.|[A-Za-z]\.)$")
 
 
 def split_sentences(text: str) -> List[str]:
-    parts = _SENTENCE_END_RX.split(text.strip())
-    return [p.strip() for p in parts if p.strip()]
+    parts = [p.strip() for p in _SENTENCE_END_RX.split(text.strip()) if p and p.strip()]
+    merged: List[str] = []
+    for part in parts:
+        if merged and _ABBREV_TAIL_RX.search(merged[-1]):
+            merged[-1] += " " + part
+        else:
+            merged.append(part)
+    return merged
 
 
 def _clock_line(elapsed_s: float, remaining_s: float) -> str:
@@ -131,23 +142,35 @@ def shape_reply(text: str, pack: Any, fallback_i: int) -> Tuple[str, bool, int]:
     cleaned = _THINK_RX.sub(" ", text or "")
     if pack.strip_fenced_blocks:
         cleaned = _FENCE_RX.sub(" ", cleaned)
+        cleaned = cleaned.replace("```", " ")  # inline stray markers
     cleaned = _LABEL_RX.sub("", cleaned.strip())
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     sentences = split_sentences(cleaned)
-    banned = [b.casefold() for b in pack.banned_phrases]
+    # word-boundary match: "love it" must not condemn "love itertools"
+    banned = [
+        re.compile(r"(?<![a-z0-9])" + re.escape(b.casefold()).replace(r"\ ", " ").replace(" ", r"\s+") + r"(?![a-z0-9])")
+        for b in pack.banned_phrases
+    ]
     kept: List[str] = []
     for sentence in sentences:
         low = sentence.casefold()
-        if any(b in low for b in banned):
+        if any(rx.search(low) for rx in banned):
             continue
         kept.append(sentence)
         if len(kept) >= pack.max_sentences:
             break
 
     final = " ".join(kept).strip()
+    # over the char budget: drop whole trailing sentences, never cut
+    # mid-thought — a clipped explanation is worse than a shorter one
+    while len(final) > pack.max_chars and len(kept) > 1:
+        kept.pop()
+        final = " ".join(kept).strip()
     if len(final) > pack.max_chars:
-        final = final[: pack.max_chars].rstrip()
+        head = final[: max(pack.max_chars - 2, 0)]
+        cut = head.rsplit(" ", 1)[0].rstrip()
+        final = (cut + " …") if cut else head.rstrip()
 
     if final:
         return final, False, fallback_i

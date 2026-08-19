@@ -373,6 +373,37 @@ def build_app(settings: Dict[str, Any]) -> Any:
         )
         return web.json_response(results)
 
+    analyze_locks: Dict[str, asyncio.Lock] = {}
+
+    async def api_analyze(request: Any) -> Any:
+        """Deep review of a finished session via the [analyze] model.
+        Cached to analysis.md — the second click is free. One flight per
+        session: a double-tap must not pay for two model calls."""
+        handle = _get_handle(request)
+        if not handle.session.is_over():
+            return web.json_response({"error": "the session is still live"}, status=409)
+        out = os.path.join(handle.session.dir, "analysis.md")
+        lock = analyze_locks.setdefault(handle.id, asyncio.Lock())
+        async with lock:
+            if os.path.isfile(out):
+                with open(out, "r", encoding="utf-8") as fh:
+                    return web.json_response({"text": fh.read().strip()})
+            from . import analyze as analyze_mod
+            from .adapters import AdapterError, make_adapter
+
+            rows = await asyncio.to_thread(events.read_transcript, handle.session.transcript.path)
+            system, user = analyze_mod.build_request(rows)
+            adapter = make_adapter(settings["analyze"])
+            try:
+                text = await asyncio.to_thread(
+                    adapter.reply, system, [{"role": "user", "content": user}]
+                )
+            except AdapterError as exc:
+                return web.json_response({"error": "analyze model call failed: %s" % exc}, status=502)
+            with open(out, "w", encoding="utf-8") as fh:
+                fh.write(text.strip() + "\n")
+            return web.json_response({"text": text.strip()})
+
     async def api_file_get(request: Any) -> Any:
         handle = _get_handle(request)
         full = _workspace_path(handle.session, request.rel_url.query.get("path", ""))
@@ -478,6 +509,7 @@ def build_app(settings: Dict[str, Any]) -> Any:
     app.router.add_get("/api/sessions/{sid}", api_meta)
     app.router.add_get("/api/sessions/{sid}/report", api_report)
     app.router.add_post("/api/sessions/{sid}/checks", api_checks)
+    app.router.add_post("/api/sessions/{sid}/analyze", api_analyze)
     app.router.add_post("/api/sessions/{sid}/end", api_end)
     app.router.add_get("/api/sessions/{sid}/file", api_file_get)
     app.router.add_put("/api/sessions/{sid}/file", api_file_put)

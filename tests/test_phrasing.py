@@ -93,6 +93,27 @@ def test_visibility_context_carries_screen_and_clock():
     assert "1:30 elapsed" in final
 
 
+def test_char_budget_drops_whole_sentences_never_cuts_mid_thought():
+    """The live bug: a real teaching answer got chopped to '…clean, rea'
+    by the char cap. Over budget must shed trailing sentences; only a
+    single monster sentence may be word-cut, and then visibly."""
+    pack = pack_a()
+    pack.max_sentences = 10
+    pack.max_chars = 60
+    text, fb, _ = shape_reply(
+        "Short first sentence here. This second sentence is long enough that it cannot fit. Third.",
+        pack, 0,
+    )
+    assert not fb
+    assert text == "Short first sentence here."
+    long_one = "word " * 40
+    text2, fb2, _ = shape_reply(long_one.strip() + ".", pack, 0)
+    assert not fb2
+    assert len(text2) <= pack.max_chars
+    assert text2.endswith("…")
+    assert not text2[:-2].endswith(" wor")  # never a mid-word cut
+
+
 def test_previous_task_and_position_shown_when_pack_opts_in():
     from harness.pack import load_pack
 
@@ -134,3 +155,49 @@ def test_previous_task_hidden_without_opt_in():
     )
     assert "PREVIOUS task" not in system
     assert " of " not in messages[-1]["content"].split("Clock:")[1].split("\n")[0]
+
+
+def test_dotted_identifiers_and_abbreviations_survive_splitting():
+    """The verified live gutting cases: dotted module paths split at
+    '.Capital', and 'e.g.' / list markers counted as sentences."""
+    from harness.phrasing import split_sentences
+
+    assert split_sentences("collections.Counter(words) does the whole tally here.") == [
+        "collections.Counter(words) does the whole tally here."
+    ]
+    assert split_sentences("Reach for pathlib.Path instead. It reads better.") == [
+        "Reach for pathlib.Path instead.",
+        "It reads better.",
+    ]
+    assert split_sentences("Use built-ins, e.g. sum and max. They beat manual loops.") == [
+        "Use built-ins, e.g. sum and max.",
+        "They beat manual loops.",
+    ]
+    # glued !? still split (the case the no-space branch exists for)
+    assert split_sentences("Superb!You nailed it!") == ["Superb!", "You nailed it!"]
+
+
+def test_banned_phrases_match_on_word_boundaries():
+    class P:
+        banned_phrases = ["love it"]
+        strip_fenced_blocks = True
+        max_sentences = 5
+        max_chars = 500
+        fallback_lines = ["Okay."]
+
+    text, fb, _ = shape_reply("You will love itertools for this.", P(), 0)
+    assert not fb and text == "You will love itertools for this."
+    text2, _, _ = shape_reply("Love it! Also, slices copy.", P(), 0)
+    assert text2 == "Also, slices copy."
+
+
+def test_inline_backtick_markers_do_not_gut_the_sentence():
+    """A stray or inline ``` in prose drops the marker, not the words;
+    only a fence that starts a line is stripped as a block."""
+    pack = pack_a()
+    text, fb, _ = shape_reply(
+        "Replace the loop with ```zip``` here, then unpack each pair.", pack, 0
+    )
+    assert not fb and text == "Replace the loop with zip here, then unpack each pair."
+    text2, fb2, _ = shape_reply("Here.\n```\nd = Counter(w)\n```\nRun it.", pack, 0)
+    assert not fb2 and "Counter" not in text2 and "Run it." in text2

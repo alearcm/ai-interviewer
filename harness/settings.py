@@ -59,6 +59,9 @@ DEFAULTS: Dict[str, Any] = {
         "temperature": 0.3,
         "max_tokens": 4000,
         "timeout_s": 240.0,
+        # the deep read is the explicit slow path: on a free-tier
+        # per-minute limit, wait out a 429 up to this long per attempt
+        "rate_limit_wait_s": 90.0,
     },
 }
 
