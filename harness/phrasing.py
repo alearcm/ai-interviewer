@@ -27,6 +27,9 @@ _LABEL_RX = re.compile(r"^\s*(interviewer|assistant|me|reply|response)\s*:\s*", 
 _SENTENCE_END_RX = re.compile(r"(?<=[.!?])\s+|(?<=[!?])(?=[A-Z])")
 # Fragments that end mid-abbreviation are glue points, not sentence ends.
 _ABBREV_TAIL_RX = re.compile(r"(?:^|\s)(?:e\.g\.|i\.e\.|etc\.|vs\.|cf\.|[0-9]{1,2}\.|[A-Za-z]\.)$")
+# A finished sentence ends in terminal punctuation (closing quotes or
+# brackets may trail it). Anything else is a mid-generation cut.
+_TERMINAL_RX = re.compile(r"[.!?…][\"')\]]*$")
 
 
 def split_sentences(text: str) -> List[str]:
@@ -160,6 +163,16 @@ def shape_reply(text: str, pack: Any, fallback_i: int) -> Tuple[str, bool, int]:
         kept.append(sentence)
         if len(kept) >= pack.max_sentences:
             break
+
+    # a reply the endpoint cut off mid-generation (max_tokens ran out)
+    # ends without terminal punctuation: drop the dangling fragment, or
+    # mark the cut when the fragment is all we have — never present a
+    # mid-sentence cut as if it were the intended reply
+    if kept and not _TERMINAL_RX.search(kept[-1]):
+        if len(kept) > 1:
+            kept.pop()
+        else:
+            kept[-1] += " …"
 
     final = " ".join(kept).strip()
     # over the char budget: drop whole trailing sentences, never cut

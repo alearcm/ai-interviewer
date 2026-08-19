@@ -201,3 +201,19 @@ def test_inline_backtick_markers_do_not_gut_the_sentence():
     assert not fb and text == "Replace the loop with zip here, then unpack each pair."
     text2, fb2, _ = shape_reply("Here.\n```\nd = Counter(w)\n```\nRun it.", pack, 0)
     assert not fb2 and "Counter" not in text2 and "Run it." in text2
+
+
+def test_api_truncated_tail_never_displayed_raw():
+    """When max_tokens runs out server-side, the reply arrives cut
+    mid-sentence. The dangling fragment is dropped when complete
+    sentences precede it, and visibly marked when it is all we have."""
+    pack = pack_a()
+    pack.max_sentences = 10
+    text, fb, _ = shape_reply(
+        "Zip pairs items in lockstep. It stops at the shorter inp", pack, 0
+    )
+    assert not fb and text == "Zip pairs items in lockstep."
+    text2, fb2, _ = shape_reply(
+        "Zip pairs items in lockstep and stops at the shorter inp", pack, 0
+    )
+    assert not fb2 and text2 == "Zip pairs items in lockstep and stops at the shorter inp …"
