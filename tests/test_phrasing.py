@@ -91,3 +91,46 @@ def test_visibility_context_carries_screen_and_clock():
     assert "value = 41" in final
     assert "Exit status 1" in final
     assert "1:30 elapsed" in final
+
+
+def test_previous_task_and_position_shown_when_pack_opts_in():
+    from harness.pack import load_pack
+
+    rehab = load_pack("packs/python-rehab")
+    assert rehab.include_previous_task
+    system, messages = build_call(
+        rehab,
+        hint_level=0,
+        rule_prompt="",
+        task=rehab.tasks[1],
+        chat_tail=[],
+        snapshots={},
+        recent_runs=[],
+        elapsed_s=60.0,
+        remaining_s=120.0,
+        prev_task=rehab.tasks[0],
+        task_pos=(2, 12),
+    )
+    assert "The PREVIOUS task, already finished" in system
+    assert rehab.tasks[0]["statement"] in system
+    assert "Task 2 of 12." in messages[-1]["content"]
+
+
+def test_previous_task_hidden_without_opt_in():
+    pack = pack_a()  # include_previous_task defaults to off
+    assert not pack.include_previous_task
+    system, messages = build_call(
+        pack,
+        hint_level=0,
+        rule_prompt="",
+        task=pack.tasks[1],
+        chat_tail=[],
+        snapshots={},
+        recent_runs=[],
+        elapsed_s=60.0,
+        remaining_s=120.0,
+        prev_task=pack.tasks[0],
+        task_pos=None,
+    )
+    assert "PREVIOUS task" not in system
+    assert " of " not in messages[-1]["content"].split("Clock:")[1].split("\n")[0]

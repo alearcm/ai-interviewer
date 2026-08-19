@@ -140,6 +140,7 @@ class SessionState:
         self.recent_runs: List[Dict[str, Any]] = []
         self.task_index = -1
         self.current_task: Optional[Dict[str, Any]] = None
+        self.previous_task: Optional[Dict[str, Any]] = None
         self.task_presented_t: Optional[float] = None
         self.task_user_messages = 0
         self.hint_level = 0
@@ -357,6 +358,12 @@ class Session:
     def _ingest(self, item: Dict[str, Any], wake: bool = True) -> None:
         item = dict(item)
         kind = item.pop("kind")
+        if kind == events.RUN_EXECUTED and self.watch is not None:
+            # a run and its just-before save race the debounce; land the
+            # save first so anything spoken about this run sees the
+            # file that actually ran
+            for pending in self.watch.flush_pending():
+                self._ingest(pending, wake=wake)
         if kind == events.IDLE:
             item["idle_s"] = round(self.offset() - self.state.last_activity_t, 3)
         row = self._record(kind, **item)
@@ -514,6 +521,10 @@ class Session:
             recent_runs=list(state.recent_runs),
             elapsed_s=t,
             remaining_s=self.minutes * 60.0 - t,
+            prev_task=state.previous_task,
+            task_pos=(state.task_index + 1, len(self.task_order))
+            if state.current_task is not None
+            else None,
         )
         source = "model"
         try:
@@ -546,6 +557,7 @@ class Session:
         if nxt >= len(self.task_order):
             self._record(events.NOTE, text="no further tasks in this pack")
             return
+        state.previous_task = state.current_task
         state.task_index = nxt
         task = self.task_order[nxt]
         state.current_task = task

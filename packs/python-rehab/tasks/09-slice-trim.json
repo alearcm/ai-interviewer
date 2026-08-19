@@ -16,7 +16,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def trim_readings(readings, warmup, cooldown):\n    kept = []\n    for i in range(warmup, len(readings) - cooldown):\n        kept.append(readings[i])\n    return kept\n"
+        "content": "def trim_readings(readings, warmup, cooldown):\n    kept = []\n    for i in range(warmup, len(readings) - cooldown):\n        kept.append(readings[i])\n    return kept\n\nif __name__ == \"__main__\":\n    assert trim_readings([9, 12, 14, 15, 13, 8], 2, 1) == [14, 15, 13]\n    assert trim_readings([1, 2, 3], 0, 0) == [1, 2, 3]\n    print(\"behavior preserved\")\n"
       }
     ]
   }

@@ -17,7 +17,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def format_scores(pairs):\n    lines = []\n    for i in range(len(pairs)):\n        pair = pairs[i]\n        name = pair[0]\n        score = pair[1]\n        lines.append(name + \": \" + str(score))\n    return lines\n"
+        "content": "def format_scores(pairs):\n    lines = []\n    for i in range(len(pairs)):\n        pair = pairs[i]\n        name = pair[0]\n        score = pair[1]\n        lines.append(name + \": \" + str(score))\n    return lines\n\nif __name__ == \"__main__\":\n    assert format_scores([(\"ana\", 10), (\"bo\", 7)]) == [\"ana: 10\", \"bo: 7\"]\n    assert format_scores([]) == []\n    print(\"behavior preserved\")\n"
       }
     ]
   }

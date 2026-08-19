@@ -16,7 +16,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def flag_overdue(balances, limit):\n    flagged = []\n    for name in balances.keys():\n        if balances[name] > limit:\n            flagged.append(name)\n    return flagged\n"
+        "content": "def flag_overdue(balances, limit):\n    flagged = []\n    for name in balances.keys():\n        if balances[name] > limit:\n            flagged.append(name)\n    return flagged\n\nif __name__ == \"__main__\":\n    assert flag_overdue({\"ana\": 120, \"bo\": 30, \"cy\": 75}, 50) == [\"ana\", \"cy\"]\n    assert flag_overdue({\"ana\": 10}, 50) == []\n    print(\"behavior preserved\")\n"
       }
     ]
   }

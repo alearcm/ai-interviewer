@@ -17,7 +17,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def count_tags(tags):\n    counts = {}\n    for tag in tags:\n        if tag in counts:\n            counts[tag] = counts[tag] + 1\n        else:\n            counts[tag] = 1\n    return counts\n"
+        "content": "def count_tags(tags):\n    counts = {}\n    for tag in tags:\n        if tag in counts:\n            counts[tag] = counts[tag] + 1\n        else:\n            counts[tag] = 1\n    return counts\n\nif __name__ == \"__main__\":\n    assert count_tags([\"a\", \"b\", \"a\", \"a\", \"c\"]) == {\"a\": 3, \"b\": 1, \"c\": 1}\n    assert count_tags([]) == {}\n    print(\"behavior preserved\")\n"
       }
     ]
   }

@@ -79,10 +79,21 @@ $("start").onclick = async () => {
 
 let ws = null, meta = null, seen = 0, clockBase = null, clockTimer = null;
 let editor = null, dirty = false, saveTimer = null, lastPulse = 0, suppressChange = false;
+let drill = null; // {seq, of, t} of the drill currently on screen
+
+function renderDrillPos(now) {
+  if (!drill) return;
+  const inDrill = fmt(Math.max(0, now - drill.t));
+  $("drill-pos").textContent = drill.seq ? `drill ${drill.seq}/${drill.of} · ${inDrill}` : inDrill;
+}
 
 function fmt(t) {
   t = Math.max(0, Math.floor(t));
   return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+}
+
+function nearBottom(log) {
+  return log.scrollHeight - log.scrollTop - log.clientHeight < 80;
 }
 
 function addMsg(cls, html) {
@@ -90,49 +101,95 @@ function addMsg(cls, html) {
   el.className = "msg " + cls;
   el.innerHTML = html;
   const log = $("log");
+  const stick = nearBottom(log);
   log.appendChild(el);
-  log.scrollTop = log.scrollHeight;
+  if (stick) log.scrollTop = log.scrollHeight; // don't yank the reader out of scrollback
   return el;
 }
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-function renderRow(row) {
+// statements are mostly code: render indented runs in monospace blocks
+function fmtStatement(text) {
+  const out = [];
+  let code = [];
+  const flush = () => {
+    if (code.length) { out.push(`<pre class="code">${esc(code.join("\n"))}</pre>`); code = []; }
+  };
+  for (const line of String(text).split("\n")) {
+    if (/^(    |\t)/.test(line)) code.push(line);
+    else { flush(); out.push(esc(line)); }
+  }
+  flush();
+  return out.join("\n");
+}
+
+// "…" bubble between a gate firing and the model's reply landing
+let typingEl = null;
+function showTyping() {
+  if (typingEl) return;
+  typingEl = addMsg("int typing", "…");
+}
+function hideTyping() {
+  if (typingEl) { typingEl.remove(); typingEl = null; }
+}
+
+function renderRow(row, hist) {
   const t = `<span class="t">${fmt(row.t)}</span>`;
   switch (row.kind) {
-    case "interviewer_message":
-      addMsg("int", t + esc(row.text));
-      window.speakLine && window.speakLine(row.text);
+    case "interviewer_message": {
+      hideTyping();
+      const el = addMsg("int", t + esc(row.text));
+      if (row.source === "fallback") {
+        el.classList.add("fallback");
+        el.title = "offline line — the model call failed; see the note above";
+      }
+      if (!hist) window.speakLine && window.speakLine(row.text);
+      break;
+    }
+    case "note":
+      addMsg("sys", t + "⚠ " + esc(row.text));
+      break;
+    case "gate_decision":
+      // a speak (or an advance, whose debrief speaks first) means a
+      // model call is in flight — show the dots so the wait is visible
+      if (!hist && (row.action === "speak" || row.action === "advance")) showTyping();
       break;
     case "user_message":
       addMsg("you", t + esc(row.text));
       break;
     case "task_presented": {
+      hideTyping(); // a silent advance never gets an interviewer line
       // the current task lives in the panel; every task also lands in
       // the chat stream as a card, so past drills stay in scrollback
-      $("task-panel").innerHTML = `<h3>${esc(row.title)}</h3>${esc(row.statement)}`;
       const panel = $("task-panel");
-      panel.classList.remove("pulse");
-      void panel.offsetWidth; // restart the animation
-      panel.classList.add("pulse");
+      panel.innerHTML = `<h3>${esc(row.title)}</h3>${fmtStatement(row.statement)}`;
+      if (!hist) {
+        panel.classList.remove("pulse");
+        void panel.offsetWidth; // restart the animation
+        panel.classList.add("pulse");
+      }
       for (const open of document.querySelectorAll("details.task-card[open]")) {
         open.removeAttribute("open");
       }
+      drill = { seq: row.seq || null, of: row.of || null, t: row.t };
+      renderDrillPos(row.t);
       const pos = row.seq && row.of ? ` · drill ${row.seq}/${row.of}` : "";
-      if (row.seq && row.of) $("drill-pos").textContent = `drill ${row.seq}/${row.of}`;
       const card = document.createElement("details");
       card.className = "task-card";
       card.setAttribute("open", "");
-      card.innerHTML = `<summary><span class="t">${fmt(row.t)}</span>▸ ${esc(row.title)}${esc(pos)}</summary><div>${esc(row.statement)}</div>`;
+      card.innerHTML = `<summary><span class="t">${fmt(row.t)}</span>▸ ${esc(row.title)}${esc(pos)}</summary><div>${fmtStatement(row.statement)}</div>`;
       const log = $("log");
+      const stick = nearBottom(log);
       log.appendChild(card);
-      log.scrollTop = log.scrollHeight;
+      if (stick || !hist) log.scrollTop = log.scrollHeight;
       break;
     }
     case "run_executed": {
       const ok = row.exit_status === 0;
       const out = [row.out, row.err].filter(Boolean).join("\n").trim();
-      const el = addMsg("run", `${t}$ ${esc(row.cmd)} <span class="${ok ? "status-ok" : "status-bad"}">(${ok ? "passed" : "exit " + row.exit_status})</span>\n${esc(out)}`);
+      const dur = row.duration_ms >= 0 ? ` in ${(row.duration_ms / 1000).toFixed(1)}s` : "";
+      const el = addMsg("run", `${t}$ ${esc(row.cmd)} <span class="${ok ? "status-ok" : "status-bad"}">(${ok ? "passed" : "exit " + row.exit_status}${esc(dur)})</span>\n${esc(out)}`);
       if (ok) el.classList.add("ok");
       break;
     }
@@ -167,19 +224,33 @@ async function selfCheck() {
   const results = await res.json();
   if (!results.length) { el.textContent = "this pack has no hidden checks"; return; }
   const ok = results.filter((r) => r.status === "ok").length;
-  el.textContent = `${ok}/${results.length} pass — ` +
-    results.map((r) => `${r.title}: ${r.status}`).join(", ");
+  const parts = [`<div>${ok}/${results.length} pass</div>`];
+  for (const r of results) {
+    const cls = r.status === "ok" ? "ok" : r.status === "failing" ? "bad" : "dim";
+    const mark = r.status === "ok" ? "✓" : r.status === "failing" ? "✗" : "·";
+    parts.push(`<div class="check ${cls}">${mark} ${esc(r.title)} — ${esc(r.status)}</div>`);
+    if (r.out) parts.push(`<pre class="code">${esc(r.out)}</pre>`);
+  }
+  el.innerHTML = parts.join("");
 }
 window.selfCheck = selfCheck;
 
 function onSessionEnd(row) {
+  hideTyping();
   $("banner").classList.remove("hidden");
   $("banner").innerHTML = `session over (${esc(row.reason)}) — <a target="_blank" href="/api/sessions/${meta.id}/report">open the report</a>
     · <a href="#" onclick="selfCheck(); return false;">run self-check</a><div id="check-result" class="dim"></div>`;
   $("btn-report").href = `/api/sessions/${meta.id}/report`;
   $("btn-report").classList.remove("hidden");
+  // the engine loop is over; make the dead controls look dead
+  for (const id of ["say", "btn-next", "btn-end", "btn-run", "run-cmd", "btn-mic"]) {
+    const c = $(id);
+    if (c) c.disabled = true;
+  }
+  if (editor) editor.setOption("readOnly", true);
   if (clockTimer) clearInterval(clockTimer);
   $("clock").textContent = "done";
+  if (drill) $("drill-pos").textContent = drill.seq ? `drill ${drill.seq}/${drill.of}` : "";
 }
 
 function startClock() {
@@ -191,6 +262,7 @@ function startClock() {
     const el = $("clock");
     el.textContent = fmt(left);
     el.classList.toggle("low", left < 300);
+    renderDrillPos(elapsed);
   }, 500);
 }
 
@@ -213,7 +285,10 @@ function connect(sid) {
     if (data.i === undefined) return;
     if (data.i < seen) return; // duplicate across replay/live seam
     seen = data.i + 1;
-    if (!data.row.stub) renderRow(data.row);
+    // rows below the count announced in the hello are replayed history:
+    // render them, but skip live-only effects (voice, pulse, typing dots)
+    const hist = meta ? data.i < meta.rows : false;
+    if (!data.row.stub) renderRow(data.row, hist);
     if (data.row.t !== undefined) clockBase = { t: data.row.t, at: performance.now() };
   };
   ws.onclose = () => {

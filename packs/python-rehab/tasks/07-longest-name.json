@@ -15,7 +15,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def longest_name(names):\n    best = None\n    best_len = -1\n    for name in names:\n        if len(name) > best_len:\n            best = name\n            best_len = len(name)\n    return best\n"
+        "content": "def longest_name(names):\n    best = None\n    best_len = -1\n    for name in names:\n        if len(name) > best_len:\n            best = name\n            best_len = len(name)\n    return best\n\nif __name__ == \"__main__\":\n    assert longest_name([\"ann\", \"roberto\", \"kim\"]) == \"roberto\"\n    assert longest_name([\"abc\", \"xyz\"]) == \"abc\"\n    print(\"behavior preserved\")\n"
       }
     ]
   }

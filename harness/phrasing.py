@@ -48,6 +48,8 @@ def build_call(
     recent_runs: List[Dict[str, Any]],
     elapsed_s: float,
     remaining_s: float,
+    prev_task: Optional[Dict[str, Any]] = None,
+    task_pos: Optional[Tuple[int, int]] = None,
 ) -> Tuple[str, List[Dict[str, str]]]:
     """Build (system, messages) for one adapter call. Everything is
     reassembled from scratch each time — persona drift has nowhere to
@@ -63,6 +65,11 @@ def build_call(
         system_parts.append("The task on their screen:\n%s" % task["statement"])
         if pack.include_task_notes and task.get("notes"):
             system_parts.append("Interviewer-only notes for this task:\n%s" % task["notes"])
+    if prev_task is not None and pack.include_previous_task:
+        prev = "The PREVIOUS task, already finished (they may still ask about it):\n%s" % prev_task["statement"]
+        if pack.include_task_notes and prev_task.get("notes"):
+            prev += "\n\nYour notes for it:\n%s" % prev_task["notes"]
+        system_parts.append(prev)
     if hint_level > 0 and pack.ladder:
         step = pack.ladder[min(hint_level, len(pack.ladder)) - 1]
         system_parts.append("Hint level %d — %s" % (hint_level, step))
@@ -81,7 +88,10 @@ def build_call(
 
     context_parts: List[str] = []
     if pack.include_clock:
-        context_parts.append(_clock_line(elapsed_s, remaining_s))
+        line = _clock_line(elapsed_s, remaining_s)
+        if task_pos is not None:
+            line += " Task %d of %d." % task_pos
+        context_parts.append(line)
     if pack.show_latest_snapshot:
         for path, content in snapshots.items():
             body = content

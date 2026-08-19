@@ -15,7 +15,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def clean_tags(raw_tags):\n    cleaned = []\n    for raw in raw_tags:\n        tag = raw.strip().lower()\n        if tag != \"\":\n            cleaned.append(tag)\n    return cleaned\n"
+        "content": "def clean_tags(raw_tags):\n    cleaned = []\n    for raw in raw_tags:\n        tag = raw.strip().lower()\n        if tag != \"\":\n            cleaned.append(tag)\n    return cleaned\n\nif __name__ == \"__main__\":\n    assert clean_tags([\"  Data  \", \"ML\", \"\"]) == [\"data\", \"ml\"]\n    assert clean_tags([\"   \", \"\\t\"]) == []\n    print(\"behavior preserved\")\n"
       }
     ]
   }

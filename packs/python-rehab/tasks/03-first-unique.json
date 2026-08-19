@@ -17,7 +17,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def first_unique(items):\n    counts = {}\n    for item in items:\n        if item in counts:\n            counts[item] = counts[item] + 1\n        else:\n            counts[item] = 1\n    for item in items:\n        if counts[item] == 1:\n            return item\n    return None\n"
+        "content": "def first_unique(items):\n    counts = {}\n    for item in items:\n        if item in counts:\n            counts[item] = counts[item] + 1\n        else:\n            counts[item] = 1\n    for item in items:\n        if counts[item] == 1:\n            return item\n    return None\n\nif __name__ == \"__main__\":\n    assert first_unique([\"a\", \"b\", \"a\", \"c\"]) == \"b\"\n    assert first_unique([\"a\", \"a\", \"b\", \"b\"]) is None\n    print(\"behavior preserved\")\n"
       }
     ]
   }
