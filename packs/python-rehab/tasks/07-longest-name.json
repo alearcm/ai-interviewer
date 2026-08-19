@@ -6,11 +6,17 @@
       "max-key"
     ],
     "statement": "This function returns the longest name in the list (first one on ties), or None for an empty list. It tracks the running best by hand with two state variables.\n\n    def longest_name(names):\n        best = None\n        best_len = -1\n        for name in names:\n            if len(name) > best_len:\n                best = name\n                best_len = len(name)\n        return best\n\nRewrite it idiomatically in solution.py; same name, same behavior.",
-    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: manual-best-scan.",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: manual-best-scan.\n\nIdiomatic reference (for your judgment and post-pass debriefs; never hand it over before their run passes):\ndef longest_name(names):\n    if not names:\n        return None\n    return max(names, key=len)",
     "appendix": "Targets: manual-best-scan\n\nHidden checks (behavior must be preserved):\nassert longest_name([\"ann\", \"roberto\", \"kim\"]) == \"roberto\"\nassert longest_name([\"abc\", \"xyz\"]) == \"abc\"\nassert longest_name([]) is None\nassert longest_name([\"q\"]) == \"q\"\nassert longest_name([\"\", \"a\", \"\"]) == \"a\"\n\nIdiomatic reference:\ndef longest_name(names):\n    if not names:\n        return None\n    return max(names, key=len)\n",
     "focus": [
       "manual-best-scan"
     ],
-    "check": "assert longest_name([\"ann\", \"roberto\", \"kim\"]) == \"roberto\"\nassert longest_name([\"abc\", \"xyz\"]) == \"abc\"\nassert longest_name([]) is None\nassert longest_name([\"q\"]) == \"q\"\nassert longest_name([\"\", \"a\", \"\"]) == \"a\""
+    "check": "assert longest_name([\"ann\", \"roberto\", \"kim\"]) == \"roberto\"\nassert longest_name([\"abc\", \"xyz\"]) == \"abc\"\nassert longest_name([]) is None\nassert longest_name([\"q\"]) == \"q\"\nassert longest_name([\"\", \"a\", \"\"]) == \"a\"",
+    "seed": [
+      {
+        "path": "solution.py",
+        "content": "def longest_name(names):\n    best = None\n    best_len = -1\n    for name in names:\n        if len(name) > best_len:\n            best = name\n            best_len = len(name)\n    return best\n"
+      }
+    ]
   }
 }

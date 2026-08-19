@@ -107,14 +107,33 @@ function renderRow(row) {
     case "user_message":
       addMsg("you", t + esc(row.text));
       break;
-    case "task_presented":
+    case "task_presented": {
+      // the current task lives in the panel; every task also lands in
+      // the chat stream as a card, so past drills stay in scrollback
       $("task-panel").innerHTML = `<h3>${esc(row.title)}</h3>${esc(row.statement)}`;
-      addMsg("sys", t + "task presented: " + esc(row.title));
+      const panel = $("task-panel");
+      panel.classList.remove("pulse");
+      void panel.offsetWidth; // restart the animation
+      panel.classList.add("pulse");
+      for (const open of document.querySelectorAll("details.task-card[open]")) {
+        open.removeAttribute("open");
+      }
+      const pos = row.seq && row.of ? ` · drill ${row.seq}/${row.of}` : "";
+      if (row.seq && row.of) $("drill-pos").textContent = `drill ${row.seq}/${row.of}`;
+      const card = document.createElement("details");
+      card.className = "task-card";
+      card.setAttribute("open", "");
+      card.innerHTML = `<summary><span class="t">${fmt(row.t)}</span>▸ ${esc(row.title)}${esc(pos)}</summary><div>${esc(row.statement)}</div>`;
+      const log = $("log");
+      log.appendChild(card);
+      log.scrollTop = log.scrollHeight;
       break;
+    }
     case "run_executed": {
       const ok = row.exit_status === 0;
       const out = [row.out, row.err].filter(Boolean).join("\n").trim();
-      addMsg("run", `${t}$ ${esc(row.cmd)} <span class="${ok ? "status-ok" : "status-bad"}">(exit ${row.exit_status})</span>\n${esc(out)}`);
+      const el = addMsg("run", `${t}$ ${esc(row.cmd)} <span class="${ok ? "status-ok" : "status-bad"}">(${ok ? "passed" : "exit " + row.exit_status})</span>\n${esc(out)}`);
+      if (ok) el.classList.add("ok");
       break;
     }
     case "file_saved":

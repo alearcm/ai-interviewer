@@ -7,12 +7,18 @@
       "counting"
     ],
     "statement": "This function builds a frequency table of tags. It works, but it is written the way you would write it in Java — hand-rolled membership check plus init-or-increment branching.\n\n    def count_tags(tags):\n        counts = {}\n        for tag in tags:\n            if tag in counts:\n                counts[tag] = counts[tag] + 1\n            else:\n                counts[tag] = 1\n        return counts\n\nRewrite it idiomatically in solution.py; same name, same behavior.",
-    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: counting-by-hand, membership-branch.",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: counting-by-hand, membership-branch.\n\nIdiomatic reference (for your judgment and post-pass debriefs; never hand it over before their run passes):\nfrom collections import Counter\n\n\ndef count_tags(tags):\n    return dict(Counter(tags))",
     "appendix": "Targets: counting-by-hand, membership-branch\n\nHidden checks (behavior must be preserved):\nassert count_tags([\"a\", \"b\", \"a\", \"a\", \"c\"]) == {\"a\": 3, \"b\": 1, \"c\": 1}\nassert count_tags([]) == {}\nassert count_tags([\"x\"]) == {\"x\": 1}\nassert count_tags([\"hot\", \"hot\", \"cold\", \"hot\", \"cold\"]) == {\"hot\": 3, \"cold\": 2}\n\nIdiomatic reference:\nfrom collections import Counter\n\n\ndef count_tags(tags):\n    return dict(Counter(tags))\n",
     "focus": [
       "counting-by-hand",
       "membership-branch"
     ],
-    "check": "assert count_tags([\"a\", \"b\", \"a\", \"a\", \"c\"]) == {\"a\": 3, \"b\": 1, \"c\": 1}\nassert count_tags([]) == {}\nassert count_tags([\"x\"]) == {\"x\": 1}\nassert count_tags([\"hot\", \"hot\", \"cold\", \"hot\", \"cold\"]) == {\"hot\": 3, \"cold\": 2}"
+    "check": "assert count_tags([\"a\", \"b\", \"a\", \"a\", \"c\"]) == {\"a\": 3, \"b\": 1, \"c\": 1}\nassert count_tags([]) == {}\nassert count_tags([\"x\"]) == {\"x\": 1}\nassert count_tags([\"hot\", \"hot\", \"cold\", \"hot\", \"cold\"]) == {\"hot\": 3, \"cold\": 2}",
+    "seed": [
+      {
+        "path": "solution.py",
+        "content": "def count_tags(tags):\n    counts = {}\n    for tag in tags:\n        if tag in counts:\n            counts[tag] = counts[tag] + 1\n        else:\n            counts[tag] = 1\n    return counts\n"
+      }
+    ]
   }
 }

@@ -7,12 +7,18 @@
       "comprehensions"
     ],
     "statement": "This function turns (name, score) pairs into display lines like \"ana: 10\". It indexes the list by position and pokes into each pair with [0] and [1] — classic Java reflexes.\n\n    def format_scores(pairs):\n        lines = []\n        for i in range(len(pairs)):\n            pair = pairs[i]\n            name = pair[0]\n            score = pair[1]\n            lines.append(name + \": \" + str(score))\n        return lines\n\nRewrite it idiomatically in solution.py; same name, same behavior.",
-    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: index-loop, pair-not-unpacked.",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: index-loop, pair-not-unpacked.\n\nIdiomatic reference (for your judgment and post-pass debriefs; never hand it over before their run passes):\ndef format_scores(pairs):\n    return [f\"{name}: {score}\" for name, score in pairs]",
     "appendix": "Targets: index-loop, pair-not-unpacked\n\nHidden checks (behavior must be preserved):\nassert format_scores([(\"ana\", 10), (\"bo\", 7)]) == [\"ana: 10\", \"bo: 7\"]\nassert format_scores([]) == []\nassert format_scores([[\"cy\", 0]]) == [\"cy: 0\"]\nassert format_scores([(\"z\", -3), (\"z\", -3)]) == [\"z: -3\", \"z: -3\"]\n\nIdiomatic reference:\ndef format_scores(pairs):\n    return [f\"{name}: {score}\" for name, score in pairs]\n",
     "focus": [
       "index-loop",
       "pair-not-unpacked"
     ],
-    "check": "assert format_scores([(\"ana\", 10), (\"bo\", 7)]) == [\"ana: 10\", \"bo: 7\"]\nassert format_scores([]) == []\nassert format_scores([[\"cy\", 0]]) == [\"cy: 0\"]\nassert format_scores([(\"z\", -3), (\"z\", -3)]) == [\"z: -3\", \"z: -3\"]"
+    "check": "assert format_scores([(\"ana\", 10), (\"bo\", 7)]) == [\"ana: 10\", \"bo: 7\"]\nassert format_scores([]) == []\nassert format_scores([[\"cy\", 0]]) == [\"cy: 0\"]\nassert format_scores([(\"z\", -3), (\"z\", -3)]) == [\"z: -3\", \"z: -3\"]",
+    "seed": [
+      {
+        "path": "solution.py",
+        "content": "def format_scores(pairs):\n    lines = []\n    for i in range(len(pairs)):\n        pair = pairs[i]\n        name = pair[0]\n        score = pair[1]\n        lines.append(name + \": \" + str(score))\n    return lines\n"
+      }
+    ]
   }
 }

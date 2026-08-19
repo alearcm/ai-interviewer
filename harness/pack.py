@@ -289,8 +289,8 @@ class Pack:
             out["include_writes"] = bool(raw.get("include_writes", True))
         elif kind == "watchlist":
             out["scope"] = str(raw.get("scope", "all"))
-            if out["scope"] not in ("all", "final"):
-                raise PackError("watchlist scope must be 'all' or 'final'")
+            if out["scope"] not in ("all", "final", "task_final"):
+                raise PackError("watchlist scope must be 'all', 'final' or 'task_final'")
             out["patterns"] = [Pattern(p, i) for p in raw.get("patterns", [])]
             exclude = raw.get("exclude_lines", "")
             try:
