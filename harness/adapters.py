@@ -36,6 +36,10 @@ def _post_json(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeo
     body = bytes(json.dumps(payload), "utf-8")
     request = urllib.request.Request(url, data=body, method="POST")
     request.add_header("Content-Type", "application/json")
+    request.add_header("Accept", "application/json")
+    # the default urllib signature trips WAF/bot filters (Cloudflare
+    # "error 1010") in front of some hosted endpoints
+    request.add_header("User-Agent", "interview-harness/0.2")
     for key, value in headers.items():
         request.add_header(key, value)
     try:
