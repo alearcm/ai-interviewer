@@ -86,7 +86,7 @@ class _SaveHandler(FileSystemEventHandler):
             self._timers[rel] = timer
             timer.start()
 
-    def _snapshot(self, rel: str) -> None:
+    def _snapshot(self, rel: str, collect: bool = False) -> Optional[Dict[str, Any]]:
         with self._lock:
             self._timers.pop(rel, None)
         path = os.path.join(self.root, rel)
@@ -94,26 +94,44 @@ class _SaveHandler(FileSystemEventHandler):
             with open(path, "rb") as fh:
                 raw = fh.read(self.max_bytes + 1)
         except OSError:
-            return
+            return None
         if b"\x00" in raw[:4096]:
-            return  # binary; the interviewer can only read text
+            return None  # binary; the interviewer can only read text
         truncated = len(raw) > self.max_bytes
         raw = raw[: self.max_bytes]
         digest = hashlib.sha256(raw).hexdigest()
         if self._hashes.get(rel) == digest:
-            return
+            return None
         self._hashes[rel] = digest
         text = str(raw, "utf-8", "replace")
-        self.emit(
-            {
-                "kind": "file_saved",
-                "path": rel.replace(os.sep, "/"),
-                "content": text,
-                "sha256": digest,
-                "bytes": len(raw),
-                "truncated": truncated,
-            }
-        )
+        row = {
+            "kind": "file_saved",
+            "path": rel.replace(os.sep, "/"),
+            "content": text,
+            "sha256": digest,
+            "bytes": len(raw),
+            "truncated": truncated,
+        }
+        if collect:
+            return row
+        self.emit(row)
+        return None
+
+    def flush_pending(self) -> List[Dict[str, Any]]:
+        """Cancel pending debounce timers and snapshot their files NOW,
+        returning the rows instead of emitting them — so a caller can
+        place them at an exact point in the transcript (task
+        boundaries, session end)."""
+        with self._lock:
+            pending = list(self._timers)
+            for rel in pending:
+                self._timers.pop(rel).cancel()
+        rows = []
+        for rel in pending:
+            row = self._snapshot(rel, collect=True)
+            if row is not None:
+                rows.append(row)
+        return rows
 
 
 class _SpoolHandler(FileSystemEventHandler):
@@ -192,6 +210,9 @@ class WorkspaceWatch:
         self._observer.schedule(self._save_handler, workspace, recursive=True)
         if spool:
             self._observer.schedule(_SpoolHandler(spool, emit), spool, recursive=True)
+
+    def flush_pending(self) -> List[Dict[str, Any]]:
+        return self._save_handler.flush_pending()
 
     def register_content(self, rel: str, raw: bytes) -> None:
         """Pre-register content the ENGINE is about to write, so the

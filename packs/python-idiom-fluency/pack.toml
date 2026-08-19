@@ -26,7 +26,6 @@ interjection_budget = 4
 opening_line = "45 minutes. The task is on your screen. Begin when ready."
 fallback_lines = ["Okay.", "Go on.", "Why that?", "Keep working."]
 banned_phrases = [
-  "`", "import ", "def ", "return ", "lambda", "try using", "you could use", "you can use",
   "great", "exactly", "perfect", "awesome", "excellent", "well done",
   "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
   "no worries", "don't worry", "feel free", "happy to", "you're right",
@@ -56,8 +55,8 @@ moving, let them be wrong.
 
 If they ask HOW to solve it, what to use, or for the answer: never
 tell them, at any hint level. Deflect with at most one short open
-question. Import lines, expressions, and backticked names are
-forbidden in your replies.
+question. When you do speak, anchor it to what is actually on their
+screen — their own lines and names, not generic advice.
 '''
 
 [visibility]
