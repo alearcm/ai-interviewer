@@ -114,6 +114,38 @@ and recurrence-weighted ordering picks up where it left off. ARM boxes
 (Hetzner CAX, Oracle A1) work: the stack is pure Python, watchdog and
 aiohttp ship aarch64 wheels, and the docker base image is multi-arch.
 
+## Variant — public HTTPS + password, no Tailscale
+
+If you'd rather have a normal URL with a login prompt than a private
+network: a free DuckDNS subdomain + Caddy gives automatic Let's
+Encrypt TLS and basic-auth in front of the pane. The harness itself
+keeps its default 127.0.0.1 bind, so the auth cannot be bypassed by
+hitting :8765 directly — only Caddy (80/443) and SSH are open.
+
+1. duckdns.org → sign in → create `yourname.duckdns.org` → set its IP
+   to the server's public IPv4.
+2. On the server, after the standard app setup (user, venv, systemd
+   unit with `ExecStart=... harness web` and NO --host flag):
+
+```sh
+apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install -y caddy
+
+ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
+
+HASH=$(caddy hash-password)   # prompts for your chosen password
+printf '%s {\n    basic_auth {\n        %s %s\n    }\n    reverse_proxy 127.0.0.1:8765\n}\n' \
+    "yourname.duckdns.org" "yourlogin" "$HASH" > /etc/caddy/Caddyfile
+systemctl reload caddy
+```
+
+Then open `https://yourname.duckdns.org` and log in. Notes: this is
+ONE shared password over TLS guarding a pane whose run button executes
+commands — make it long and random; upgrade to Cloudflare Access
+(below) for per-person logins before sharing with friends.
+
 ## Stage 3 — friends (auth + sandboxing)
 
 Two switches, in this order:
