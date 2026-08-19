@@ -166,17 +166,38 @@ def test_rehab_checks_run_green_against_references():
     assert all(r["status"] == "ok" for r in results), results
 
 
-def test_rehab_pack_guards_against_hollow_passes():
-    """The advance rule must require a save inside the current drill —
-    an untouched seed or a `ls`-style run can't fake a pass — and every
-    seed must carry a visible self-test so exit 0 means behavior held."""
+def test_rehab_pack_is_learner_paced_and_guards_hollow_passes():
+    """Nothing in the rehab pack may auto-advance — a passing run earns
+    a debrief and the learner presses next. The debrief must require a
+    save inside the current drill (an untouched seed or a `ls`-style
+    run can't fake a pass), and every seed must carry a visible
+    self-test so exit 0 means behavior held."""
     rehab = load_pack("packs/python-rehab")
-    adv = next(r for r in rehab.rules if r.id == "advance-on-clean-run")
-    assert "since_last_save_s" in adv.raw["when"]
+    assert all(r.action != "advance" for r in rehab.rules), "pacing belongs to the learner"
+    debrief = next(r for r in rehab.rules if r.id == "debrief-on-clean-run")
+    assert debrief.action == "speak"
+    assert "since_last_save_s" in debrief.raw["when"]
     assert any(r.id == "set-complete" for r in rehab.rules)
     for task in rehab.tasks:
         seed = next(s for s in task["seed"] if s["path"] == "solution.py")
         assert '__main__' in seed["content"], task["id"]
+
+
+def test_rehab_drills_do_not_spoil_their_own_answer():
+    """The learner's complaint verbatim: 'it just gives me the answer
+    in hints in the problem itself'. Titles and statements may describe
+    behavior; they must never name the target construct (the task's own
+    tags) or carry an inline hint. Recognition is part of the rep — the
+    ladder, debrief and post-pass reveal carry the teaching."""
+    rehab = load_pack("packs/python-rehab")
+    for task in rehab.tasks:
+        text = (task["title"] + " " + task["statement"]).casefold()
+        assert "(hint" not in text, task["id"]
+        for tag in task["tags"]:
+            for word in tag.split("-"):
+                if word in ("mixed", "strings", "counting"):
+                    continue  # descriptive, not a construct name
+                assert word not in text, (task["id"], word)
 
 
 def test_rehab_seeds_run_green(tmp_path):

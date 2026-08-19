@@ -571,6 +571,9 @@ class Session:
             statement=task["statement"],
             seq=nxt + 1,
             of=len(self.task_order),
+            # opaque pack material; front ends may reveal it once the
+            # task is done (e.g. references), never before
+            appendix=task.get("appendix", ""),
         )
         for entry in task.get("seed", []):
             self._write_to_workspace(

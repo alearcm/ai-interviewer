@@ -73,6 +73,7 @@ def make_env(tmp_path):
         (d / "tasks" / "t.toml").write_text(MINI_TASK, encoding="utf-8")
     return {
         "model": {"provider": "canned"},
+        "analyze": {"provider": "canned"},
         "run": {"timeout_s": 10.0, "output_max_chars": 2000},
         "paths": {"sessions_dir": str(tmp_path / "sessions")},
         "web": {"host": "127.0.0.1", "port": 0, "ui_dir": "", "packs_dir": str(packs)},
@@ -163,6 +164,19 @@ async def scenario(tmp_path):
         assert report.status == 200
         assert "hello there" in await report.text()
 
+        # task rows carry the (possibly empty) pack appendix for
+        # post-completion reveals in the front end
+        t_row = next(r["row"] for r in bag["rows"] if r["row"]["kind"] == "task_presented")
+        assert "appendix" in t_row
+
+        # deep review over the finished transcript; cached to analysis.md
+        first = await client.post(f"/api/sessions/{sid}/analyze")
+        assert first.status == 200, await first.text()
+        text1 = (await first.json())["text"]
+        assert text1
+        again = await client.post(f"/api/sessions/{sid}/analyze")
+        assert (await again.json())["text"] == text1  # served from cache
+
         # resume replays the exact same row sequence
         ws2 = await client.ws_connect(f"/api/sessions/{sid}/ws?resume=0")
         bag2 = await recv_rows(
@@ -179,6 +193,9 @@ async def scenario(tmp_path):
         meta_v = await res.json()
         assert meta_v["has_workspace"] is False
         ws3 = await client.ws_connect(f"/api/sessions/{meta_v['id']}/ws?resume=0")
+        # analyze refuses while the session is still live
+        early = await client.post(f"/api/sessions/{meta_v['id']}/analyze")
+        assert early.status == 409
         await ws3.send_json({"command": "/end"})
         await recv_rows(ws3, lambda b: "session_end" in kinds(b), stage="verbal-end")
         await ws3.close()

@@ -1,11 +1,11 @@
 {
   "task": {
     "id": "items-overdue",
-    "title": "Iterate dict items, not keys",
+    "title": "overdue accounts",
     "tags": [
       "dict-iteration"
     ],
-    "statement": "This function lists everyone whose balance exceeds a limit. Note the Java tell: looping over .keys() and then indexing back into the dict for each value.\n\n    def flag_overdue(balances, limit):\n        flagged = []\n        for name in balances.keys():\n            if balances[name] > limit:\n                flagged.append(name)\n        return flagged\n\nRewrite it idiomatically in solution.py; same name, same behavior. (Hint: .items() gives you key and value together — no balances[name] lookup anywhere.)",
+    "statement": "This function lists every account holder whose balance exceeds a limit, in the order they appear. Correct, but a fluent reviewer would rewrite it.\n\n    def flag_overdue(balances, limit):\n        flagged = []\n        for name in balances.keys():\n            if balances[name] > limit:\n                flagged.append(name)\n        return flagged\n\nRewrite it idiomatically in solution.py; same name, same behavior.",
     "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: keys-iteration, append-transform-loop.\n\nIdiomatic reference (for your judgment and post-pass debriefs; never hand it over before their run passes):\ndef flag_overdue(balances, limit):\n    return [name for name, balance in balances.items() if balance > limit]",
     "appendix": "Targets: keys-iteration, append-transform-loop\n\nHidden checks (behavior must be preserved):\nassert flag_overdue({\"ana\": 120, \"bo\": 30, \"cy\": 75}, 50) == [\"ana\", \"cy\"]\nassert flag_overdue({\"ana\": 10}, 50) == []\nassert flag_overdue({}, 0) == []\nassert flag_overdue({\"a\": 1, \"b\": 2}, 1) == [\"b\"]\nassert flag_overdue({\"x\": 5, \"y\": 5}, 5) == []\n\nIdiomatic reference:\ndef flag_overdue(balances, limit):\n    return [name for name, balance in balances.items() if balance > limit]\n",
     "focus": [

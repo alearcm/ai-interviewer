@@ -22,21 +22,7 @@ async function initLanding() {
     o.textContent = `${p.title} (${p.minutes} min${p.workspace ? "" : ", no workspace"})`;
     sel.appendChild(o);
   }
-  sel.onchange = fillTasks;
-  fillTasks();
   renderSessions();
-}
-
-function fillTasks() {
-  const p = packs.find((x) => x.name === $("pack-select").value);
-  const sel = $("task-select");
-  sel.innerHTML = '<option value="">random / pack order</option>';
-  for (const t of p ? p.tasks : []) {
-    const o = document.createElement("option");
-    o.value = t.id;
-    o.textContent = t.title;
-    sel.appendChild(o);
-  }
 }
 
 async function renderSessions() {
@@ -62,7 +48,6 @@ $("start").onclick = async () => {
   const body = {
     pack: $("pack-select").value,
     minutes: $("minutes").value || null,
-    task: $("task-select").value || null,
     provider: $("provider").value || null,
   };
   const res = await fetch("/api/sessions", {
@@ -80,6 +65,8 @@ $("start").onclick = async () => {
 let ws = null, meta = null, seen = 0, clockBase = null, clockTimer = null;
 let editor = null, dirty = false, saveTimer = null, lastPulse = 0, suppressChange = false;
 let drill = null; // {seq, of, t} of the drill currently on screen
+// pack material for the current drill, revealed only after a pass
+let reveal = { appendix: "", taskId: null, shown: {} };
 
 function renderDrillPos(now) {
   if (!drill) return;
@@ -125,12 +112,16 @@ function fmtStatement(text) {
 }
 
 // "…" bubble between a gate firing and the model's reply landing
-let typingEl = null;
+let typingEl = null, typingKill = null;
 function showTyping() {
   if (typingEl) return;
   typingEl = addMsg("int typing", "…");
+  // safety net: a decision that never produces a message (e.g. an
+  // advance with no further tasks) must not leave dots forever
+  typingKill = setTimeout(hideTyping, 90000);
 }
 function hideTyping() {
+  if (typingKill) { clearTimeout(typingKill); typingKill = null; }
   if (typingEl) { typingEl.remove(); typingEl = null; }
 }
 
@@ -148,6 +139,7 @@ function renderRow(row, hist) {
       break;
     }
     case "note":
+      hideTyping(); // a note is the terminal outcome of a dead-end action
       addMsg("sys", t + "⚠ " + esc(row.text));
       break;
     case "gate_decision":
@@ -174,6 +166,9 @@ function renderRow(row, hist) {
       }
       drill = { seq: row.seq || null, of: row.of || null, t: row.t };
       renderDrillPos(row.t);
+      reveal.appendix = row.appendix || "";
+      reveal.taskId = row.task_id;
+      $("btn-next").classList.remove("ready");
       const pos = row.seq && row.of ? ` · drill ${row.seq}/${row.of}` : "";
       const card = document.createElement("details");
       card.className = "task-card";
@@ -190,14 +185,32 @@ function renderRow(row, hist) {
       const out = [row.out, row.err].filter(Boolean).join("\n").trim();
       const dur = row.duration_ms >= 0 ? ` in ${(row.duration_ms / 1000).toFixed(1)}s` : "";
       const el = addMsg("run", `${t}$ ${esc(row.cmd)} <span class="${ok ? "status-ok" : "status-bad"}">(${ok ? "passed" : "exit " + row.exit_status}${esc(dur)})</span>\n${esc(out)}`);
-      if (ok) el.classList.add("ok");
+      if (ok) {
+        el.classList.add("ok");
+        // a pass unlocks the drill's materials and lights the way out —
+        // but moving on stays the learner's call
+        $("btn-next").classList.add("ready");
+        if (reveal.appendix && !reveal.shown[reveal.taskId]) {
+          reveal.shown[reveal.taskId] = true;
+          const d = document.createElement("details");
+          d.className = "reveal";
+          d.innerHTML = `<summary>reference &amp; targets — open when you want the comparison</summary><pre class="code">${esc(reveal.appendix)}</pre>`;
+          const log = $("log");
+          const stick = nearBottom(log);
+          log.appendChild(d);
+          if (stick || !hist) log.scrollTop = log.scrollHeight;
+        }
+      }
       break;
     }
     case "file_saved":
       $("save-state").textContent = "observed ✓ " + fmt(row.t);
       break;
     case "pad_write":
-      if (editor && row.path === meta.primary_file) {
+      // replayed history must never touch the editor: setupEditor()
+      // already fetched the file's CURRENT content, and a stale replayed
+      // seed/append racing that fetch would corrupt the buffer
+      if (!hist && editor && row.path === meta.primary_file) {
         suppressChange = true;
         if (row.mode === "append" && row.rule !== "seed") {
           const end = { line: editor.lineCount(), ch: 0 };
@@ -217,32 +230,67 @@ function renderRow(row, hist) {
   }
 }
 
+let checkBusy = false;
 async function selfCheck() {
+  if (checkBusy) return;
+  checkBusy = true;
   const el = $("check-result");
   el.textContent = "running…";
-  const res = await fetch(`/api/sessions/${meta.id}/checks`, { method: "POST" });
-  const results = await res.json();
-  if (!results.length) { el.textContent = "this pack has no hidden checks"; return; }
-  const ok = results.filter((r) => r.status === "ok").length;
-  const parts = [`<div>${ok}/${results.length} pass</div>`];
-  for (const r of results) {
-    const cls = r.status === "ok" ? "ok" : r.status === "failing" ? "bad" : "dim";
-    const mark = r.status === "ok" ? "✓" : r.status === "failing" ? "✗" : "·";
-    parts.push(`<div class="check ${cls}">${mark} ${esc(r.title)} — ${esc(r.status)}</div>`);
-    if (r.out) parts.push(`<pre class="code">${esc(r.out)}</pre>`);
+  try {
+    const res = await fetch(`/api/sessions/${meta.id}/checks`, { method: "POST" });
+    const results = await res.json();
+    if (!res.ok || !Array.isArray(results)) {
+      el.textContent = (results && results.error) || "self-check failed — try again";
+      return;
+    }
+    if (!results.length) { el.textContent = "this pack has no hidden checks"; return; }
+    const ok = results.filter((r) => r.status === "ok").length;
+    const parts = [`<div>${ok}/${results.length} pass</div>`];
+    for (const r of results) {
+      const cls = r.status === "ok" ? "ok" : r.status === "failing" ? "bad" : "dim";
+      const mark = r.status === "ok" ? "✓" : r.status === "failing" ? "✗" : "·";
+      parts.push(`<div class="check ${cls}">${mark} ${esc(r.title)} — ${esc(r.status)}</div>`);
+      if (r.out) parts.push(`<pre class="code">${esc(r.out)}</pre>`);
+    }
+    el.innerHTML = parts.join("");
+  } catch (e) {
+    el.textContent = "network error — tap self-check again";
+  } finally {
+    checkBusy = false;
   }
-  el.innerHTML = parts.join("");
 }
 window.selfCheck = selfCheck;
+
+let verdictBusy = false;
+async function coachVerdict() {
+  if (verdictBusy) return;
+  verdictBusy = true;
+  const el = $("verdict-result");
+  el.textContent = "the coach is re-reading the whole session — this can take a minute…";
+  try {
+    const res = await fetch(`/api/sessions/${meta.id}/analyze`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) { el.textContent = data.error || "analyze failed"; return; }
+    el.innerHTML = `<pre class="verdict">${esc(data.text)}</pre>`;
+  } catch (e) {
+    el.textContent = "network error — tap coaching verdict again";
+  } finally {
+    verdictBusy = false;
+  }
+}
+window.coachVerdict = coachVerdict;
 
 function onSessionEnd(row) {
   hideTyping();
   $("banner").classList.remove("hidden");
-  $("banner").innerHTML = `session over (${esc(row.reason)}) — <a target="_blank" href="/api/sessions/${meta.id}/report">open the report</a>
-    · <a href="#" onclick="selfCheck(); return false;">run self-check</a><div id="check-result" class="dim"></div>`;
+  $("banner").innerHTML = `session over (${esc(row.reason)}) — <a target="_blank" href="/api/sessions/${meta.id}/report">report</a>
+    · <a href="#" onclick="selfCheck(); return false;">self-check</a>
+    · <a href="#" onclick="coachVerdict(); return false;">coaching verdict</a>
+    <div id="check-result" class="dim"></div><div id="verdict-result"></div>`;
   $("btn-report").href = `/api/sessions/${meta.id}/report`;
   $("btn-report").classList.remove("hidden");
   // the engine loop is over; make the dead controls look dead
+  $("btn-next").classList.remove("ready");
   for (const id of ["say", "btn-next", "btn-end", "btn-run", "run-cmd", "btn-mic"]) {
     const c = $(id);
     if (c) c.disabled = true;
@@ -289,7 +337,14 @@ function connect(sid) {
     // render them, but skip live-only effects (voice, pulse, typing dots)
     const hist = meta ? data.i < meta.rows : false;
     if (!data.row.stub) renderRow(data.row, hist);
-    if (data.row.t !== undefined) clockBase = { t: data.row.t, at: performance.now() };
+    // only live rows advance the clock — replayed history would rewind
+    // it to the last transcript row (the hello's now_t is already right)
+    if (!hist && data.row.t !== undefined) clockBase = { t: data.row.t, at: performance.now() };
+  };
+  ws.onopen = () => {
+    // edits typed while the socket was down are still only in the
+    // buffer; flush them the moment we're back
+    if (dirty) saveFile();
   };
   ws.onclose = () => {
     if (meta && !document.hidden) setTimeout(() => connect(sid), 1500);
