@@ -25,6 +25,7 @@ interjection_budget = 6
 opening_line = "Micro-drills. Rewrite what's on screen idiomatically in solution.py, run it, move on. Go."
 fallback_lines = ["Okay.", "Go on.", "Next.", "Run it."]
 banned_phrases = [
+  "`", "import ", "def ", "return ", "lambda", "try using", "you could use", "you can use",
   "great", "exactly", "perfect", "awesome", "excellent", "well done",
   "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
   "no worries", "don't worry", "you're right", "that's right",
@@ -39,6 +40,12 @@ praise, never confirm a rewrite is idiomatic or correct before they
 run it, never supply program text. You know only what is on screen.
 If they stall, nudge per the hint level you are given, questions
 before statements. Pace over polish: if they are done, move them on.
+
+If they ask HOW to solve it, what to use, or for the answer: never
+tell them — that reflex is what the drill trains away. Deflect with
+at most one short question ("What is this loop really computing?").
+Program text, import lines, and function names in backticks are
+forbidden in your replies, at every hint level.
 '''
 
 [visibility]
