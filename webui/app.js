@@ -11,7 +11,9 @@ const $ = (id) => document.getElementById(id);
 let packs = [];
 
 async function initLanding() {
-  packs = await (await fetch("/api/packs")).json();
+  const res = await fetch("/api/packs");
+  if (res.status === 401) { location.href = "/login"; return; }
+  packs = await res.json();
   const sel = $("pack-select");
   sel.innerHTML = "";
   for (const p of packs) {
@@ -209,7 +211,8 @@ function connect(sid) {
 async function setupEditor() {
   $("right").classList.remove("hidden");
   $("filename").textContent = meta.primary_file;
-  $("run-cmd").value = localStorage.getItem("run-cmd:" + meta.pack) || "";
+  // pack default first; a command the user typed themselves wins
+  $("run-cmd").value = localStorage.getItem("run-cmd:" + meta.pack) || meta.run_cmd || "";
   if (editor) return;
   const res = await fetch(`/api/sessions/${meta.id}/file?path=${encodeURIComponent(meta.primary_file)}`);
   const data = await res.json();
@@ -260,9 +263,9 @@ $("btn-end").onclick = () => {
   if (confirm("End the session?")) ws.send(JSON.stringify({ command: "/end" }));
 };
 $("btn-run").onclick = () => {
-  const cmd = $("run-cmd").value.trim();
+  const cmd = $("run-cmd").value.trim() || (meta.run_cmd || "").trim();
   if (!cmd) { $("save-state").textContent = "enter a run command first"; return; }
-  localStorage.setItem("run-cmd:" + meta.pack, cmd);
+  if (cmd !== (meta.run_cmd || "").trim()) localStorage.setItem("run-cmd:" + meta.pack, cmd);
   saveFile();
   ws.send(JSON.stringify({ run: cmd }));
 };

@@ -15,6 +15,7 @@ title = "Algorithm drill under the clock"
 minutes = 40
 workspace = true
 primary_file = "solution.py"
+run_cmd = "python3 solution.py"
 idle_threshold_s = 180
 debounce_ms = 1200
 clock_marks = [ { id = "ten_left", at_min = 30 } ]

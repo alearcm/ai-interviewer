@@ -138,13 +138,18 @@ apt update && apt install -y caddy
 
 ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
 
-HASH=$(caddy hash-password)   # prompts for your chosen password
-printf '%s {\n    basic_auth {\n        %s %s\n    }\n    reverse_proxy 127.0.0.1:8765\n}\n' \
-    "yourname.duckdns.org" "yourlogin" "$HASH" > /etc/caddy/Caddyfile
+printf '%s {\n    reverse_proxy 127.0.0.1:8765\n}\n' \
+    "harness.yourdomain.com" > /etc/caddy/Caddyfile
 systemctl reload caddy
 ```
 
-Then open `https://yourname.duckdns.org` and log in. Notes: this is
+3. Turn on the pane's own login by adding the password to the systemd
+   unit (`Environment=HARNESS_PASSWORD=...`) and restarting. Caddy
+   stays a pure TLS proxy; the app serves a login page and sets a
+   ~6-month cookie, so each device logs in once (works cleanly in the
+   iPad home-screen app, unlike basic-auth prompts).
+
+Then open `https://harness.yourdomain.com` and log in. Notes: this is
 ONE shared password over TLS guarding a pane whose run button executes
 commands — make it long and random; upgrade to Cloudflare Access
 (below) for per-person logins before sharing with friends.
