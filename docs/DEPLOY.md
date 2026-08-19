@@ -215,7 +215,11 @@ Set `[model]` (live interviewer — small and cheap is right) and/or
 ```toml
 # Gemini free tier (Google's OpenAI-compatible endpoint) — the active
 # default in config.toml; free-tier rate limits are far above what a
-# session needs (a handful of calls per minute at most)
+# session needs (a handful of calls per minute at most).
+# GEO-BLOCK WARNING: Google rejects free-tier calls by SERVER location
+# ("User location is not supported") — EEA/UK/CH regions and some
+# datacenter IPs. An EU-hosted VPS will fail even with a valid key:
+# host in a US region, or use the Groq free tier below instead.
 [model]
 provider = "openai-compat"
 base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
