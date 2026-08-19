@@ -46,14 +46,24 @@ Bootstrap on a fresh Debian/Ubuntu box:
 
 ```sh
 # as root, once
-apt update && apt install -y git python3-venv curl
-curl -fsSL https://tailscale.com/install.sh | sh && tailscale up
+apt update && apt install -y git python3-venv curl ufw
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up --ssh          # prints a login URL; --ssh gives key-free
+                            # SSH over the tailnet from your devices
 
-useradd -m harness && su - harness
+# FIREWALL — REQUIRED. `--host 0.0.0.0` listens on the public IP too,
+# and the pane has no auth (and /run executes commands). This closes
+# everything public except SSH while allowing the whole tailnet:
+ufw allow OpenSSH
+ufw allow in on tailscale0
+ufw --force enable
+
+adduser --disabled-password --gecos "" harness && su - harness
 git clone https://github.com/<you>/ai-interviewer && cd ai-interviewer
+# (private repo: use https://<fine-grained-PAT>@github.com/<you>/ai-interviewer)
 python3 -m venv .venv && ./.venv/bin/pip install -e ".[ui]"
 # put your model key in the environment (see presets below), then:
-./.venv/bin/harness web --host 0.0.0.0   # tailnet-only: no public port open
+./.venv/bin/harness web --host 0.0.0.0   # tailnet-only thanks to ufw above
 ```
 
 Run it as a service — `/etc/systemd/system/harness-web.service`:
