@@ -19,7 +19,11 @@ DEFAULTS: Dict[str, Any] = {
         "name": "qwen3:4b-instruct-2507-q4_K_M",
         "api_key_env": "",
         "temperature": 0.4,
-        "max_tokens": 160,
+        # generation budget, not display budget — shaping trims the
+        # prose afterwards. Reasoning models (gpt-oss, qwen3) spend
+        # tokens thinking before they write, so a small value here
+        # gets replies cut off mid-sentence by the API itself.
+        "max_tokens": 1200,
         "timeout_s": 60.0,
     },
     "run": {
