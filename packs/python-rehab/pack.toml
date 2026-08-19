@@ -31,20 +31,24 @@ banned_phrases = [
   "good question", "makes sense",
 ]
 persona = '''
-You are a terse technical observer running rapid rewrite drills. The
-candidate sees a working but Java-shaped Python function and must
-rewrite it idiomatically, preserving name and behavior. Register:
-neutral, clipped, unencouraging — "Okay.", "Next.", "Run it.". Never
-praise, never confirm a rewrite is idiomatic or correct before they
-run it, never supply program text. You know only what is on screen.
-If they stall, nudge per the hint level you are given, questions
-before statements. Pace over polish: if they are done, move them on.
+You are a drill COACH running rapid Python rewrite reps — not a mock
+interviewer. The candidate sees a working but Java-shaped function and
+rewrites it idiomatically, preserving name and behavior.
 
-If they ask HOW to solve it, what to use, or for the answer: never
-tell them — that reflex is what the drill trains away. Deflect with
-at most one short question ("What is this loop really computing?").
-When you do speak, anchor it to what is actually on their screen —
-refer to their own lines and names, not generic advice.
+While they work: stay out of the way; short acknowledgments only.
+When they ask a concept question ("what does a slice do?"), answer it
+plainly and compactly — teaching concepts is your job. When they ask
+for the solution itself, deflect with one short question; handing over
+the line defeats the rep. Never write their line for them before their
+run passes.
+
+When a run PASSES you debrief: compare their final rewrite to the
+idiomatic reference in your notes, in one or two sentences — what they
+landed, what is still un-idiomatic. Direct and specific; a verdict,
+not praise. After the debrief, the next drill begins.
+
+Always anchor what you say to what is actually on their screen — their
+own lines and names, never generic advice.
 '''
 
 [visibility]
@@ -81,7 +85,7 @@ action = "speak"
 hint = "none"
 counts_toward_budget = false
 priority = 100
-prompt = "The candidate spoke. Reply per persona, tersely, validating nothing."
+prompt = "The candidate spoke. Coach register: concept questions get a plain compact answer; solution requests get one deflecting question; everything else a terse acknowledgment."
 
 [[rules]]
 id = "advance-on-clean-run"
@@ -91,6 +95,7 @@ action = "advance"
 counts_toward_budget = false
 cooldown_s = 5
 priority = 90
+prompt = "Their run just passed. Speak ONLY a debrief of the drill just finished: compare their rewrite on screen with the idiomatic reference in your notes — what they landed, what is still un-idiomatic, two sentences at most. Never announce, name or invent the next drill; the system presents it by itself."
 
 [[rules]]
 id = "stalled-drill"
@@ -138,7 +143,7 @@ milestones = []
 [[report.sections]]
 type = "watchlist"
 title = "shapes that survived the rewrite"
-scope = "all"
+scope = "task_final"
 
   [[report.sections.patterns]]
   id = "membership-branch"

@@ -89,11 +89,30 @@ def watchlist_hits(rows: List[Dict[str, Any]], pack: Pack) -> List[Dict[str, Any
     for row in saved:
         finals[row["path"]] = row
 
+    # scope "task_final": the last save per path within each task's
+    # slice — judges what was left behind at the end of every task,
+    # ignoring intermediate states (and seeded starting points still
+    # being rewritten)
+    task_finals = []
+    boundaries = [i for i, r in enumerate(rows) if r["kind"] == events.TASK_PRESENTED]
+    for n, start in enumerate(boundaries):
+        end = boundaries[n + 1] if n + 1 < len(boundaries) else len(rows)
+        per_path = {}
+        for row in rows[start:end]:
+            if row["kind"] == events.FILE_SAVED:
+                per_path[row["path"]] = row
+        task_finals.extend(per_path.values())
+
     excludes = [s.get("exclude_lines") for s in pack.sections if s["type"] == "watchlist"]
     excludes = [e for e in excludes if e is not None]
 
     for pattern, scope in patterns:
-        source_rows = list(finals.values()) if scope == "final" else saved
+        if scope == "final":
+            source_rows = list(finals.values())
+        elif scope == "task_final":
+            source_rows = task_finals
+        else:
+            source_rows = saved
         for row in source_rows:
             path = row["path"]
             if not pattern.matches_file(path):

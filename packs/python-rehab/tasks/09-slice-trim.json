@@ -6,12 +6,18 @@
       "slicing"
     ],
     "statement": "This drops the first `warmup` and last `cooldown` sensor readings and returns the middle as a new list. It copies element by element with an index loop — pure Java. You may assume warmup and cooldown are non-negative and warmup + cooldown never exceeds len(readings).\n\n    def trim_readings(readings, warmup, cooldown):\n        kept = []\n        for i in range(warmup, len(readings) - cooldown):\n            kept.append(readings[i])\n        return kept\n\nRewrite it idiomatically in solution.py; same name, same behavior. (Hint: one slice expression, no loop at all.)",
-    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: index-copy-loop, index-loop.",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: index-copy-loop, index-loop.\n\nIdiomatic reference (for your judgment and post-pass debriefs; never hand it over before their run passes):\ndef trim_readings(readings, warmup, cooldown):\n    return readings[warmup:len(readings) - cooldown]",
     "appendix": "Targets: index-copy-loop, index-loop\n\nHidden checks (behavior must be preserved):\nassert trim_readings([9, 12, 14, 15, 13, 8], 2, 1) == [14, 15, 13]\nassert trim_readings([1, 2, 3], 0, 0) == [1, 2, 3]\nassert trim_readings([5, 6], 1, 1) == []\nassert trim_readings([4, 8, 15, 16], 1, 0) == [8, 15, 16]\nassert trim_readings([], 0, 0) == []\nassert trim_readings([7, 7, 7], 0, 2) == [7]\n\nIdiomatic reference:\ndef trim_readings(readings, warmup, cooldown):\n    return readings[warmup:len(readings) - cooldown]\n",
     "focus": [
       "index-copy-loop",
       "index-loop"
     ],
-    "check": "assert trim_readings([9, 12, 14, 15, 13, 8], 2, 1) == [14, 15, 13]\nassert trim_readings([1, 2, 3], 0, 0) == [1, 2, 3]\nassert trim_readings([5, 6], 1, 1) == []\nassert trim_readings([4, 8, 15, 16], 1, 0) == [8, 15, 16]\nassert trim_readings([], 0, 0) == []\nassert trim_readings([7, 7, 7], 0, 2) == [7]"
+    "check": "assert trim_readings([9, 12, 14, 15, 13, 8], 2, 1) == [14, 15, 13]\nassert trim_readings([1, 2, 3], 0, 0) == [1, 2, 3]\nassert trim_readings([5, 6], 1, 1) == []\nassert trim_readings([4, 8, 15, 16], 1, 0) == [8, 15, 16]\nassert trim_readings([], 0, 0) == []\nassert trim_readings([7, 7, 7], 0, 2) == [7]",
+    "seed": [
+      {
+        "path": "solution.py",
+        "content": "def trim_readings(readings, warmup, cooldown):\n    kept = []\n    for i in range(warmup, len(readings) - cooldown):\n        kept.append(readings[i])\n    return kept\n"
+      }
+    ]
   }
 }

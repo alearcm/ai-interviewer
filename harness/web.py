@@ -144,6 +144,7 @@ class Handle:
             "has_workspace": session.workspace is not None,
             "primary_file": session.pack.primary_file,
             "run_cmd": session.pack.run_cmd,
+            "tasks_total": len(session.task_order),
         }
 
 

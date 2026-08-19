@@ -491,6 +491,10 @@ class Session:
         if decision.action == "speak":
             self._speak(decision)
         elif decision.action == "advance":
+            # an advance rule with a prompt speaks first — grounded in
+            # the task being finished, before it disappears
+            if decision.rule.prompt:
+                self._speak(decision)
             self._advance(by=decision.rule.id)
         elif decision.action == "write":
             self._pad_write(decision)
@@ -553,6 +557,8 @@ class Session:
             task_id=task["id"],
             title=task["title"],
             statement=task["statement"],
+            seq=nxt + 1,
+            of=len(self.task_order),
         )
         for entry in task.get("seed", []):
             self._write_to_workspace(

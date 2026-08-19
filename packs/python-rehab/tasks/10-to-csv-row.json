@@ -7,11 +7,17 @@
       "join"
     ],
     "statement": "This function joins a list of strings into one comma-separated row. It builds the string by repeated concatenation with a first-element flag — the StringBuilder pattern minus the StringBuilder.\n\n    def to_csv_row(fields):\n        row = \"\"\n        first = True\n        for field in fields:\n            if first:\n                row = row + field\n                first = False\n            else:\n                row = row + \",\" + field\n        return row\n\nRewrite it idiomatically in solution.py; same name, same behavior.",
-    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: str-concat-loop.",
+    "notes": "Micro-drill. If they ask whether an approach 'counts', say idiomatic means what a fluent reviewer would write today; no other resolutions to give. Targets: str-concat-loop.\n\nIdiomatic reference (for your judgment and post-pass debriefs; never hand it over before their run passes):\ndef to_csv_row(fields):\n    return \",\".join(fields)",
     "appendix": "Targets: str-concat-loop\n\nHidden checks (behavior must be preserved):\nassert to_csv_row([\"a\", \"b\", \"c\"]) == \"a,b,c\"\nassert to_csv_row([\"solo\"]) == \"solo\"\nassert to_csv_row([]) == \"\"\nassert to_csv_row([\"\", \"x\", \"\"]) == \",x,\"\n\nIdiomatic reference:\ndef to_csv_row(fields):\n    return \",\".join(fields)\n",
     "focus": [
       "str-concat-loop"
     ],
-    "check": "assert to_csv_row([\"a\", \"b\", \"c\"]) == \"a,b,c\"\nassert to_csv_row([\"solo\"]) == \"solo\"\nassert to_csv_row([]) == \"\"\nassert to_csv_row([\"\", \"x\", \"\"]) == \",x,\""
+    "check": "assert to_csv_row([\"a\", \"b\", \"c\"]) == \"a,b,c\"\nassert to_csv_row([\"solo\"]) == \"solo\"\nassert to_csv_row([]) == \"\"\nassert to_csv_row([\"\", \"x\", \"\"]) == \",x,\"",
+    "seed": [
+      {
+        "path": "solution.py",
+        "content": "def to_csv_row(fields):\n    row = \"\"\n    first = True\n    for field in fields:\n        if first:\n            row = row + field\n            first = False\n        else:\n            row = row + \",\" + field\n    return row\n"
+      }
+    ]
   }
 }

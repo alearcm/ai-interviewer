@@ -350,6 +350,35 @@ def test_pending_save_lands_in_its_own_task_slice(tmp_path):
     assert [r["status"] for r in results] == ["ok", "ok"]
 
 
+def test_advance_rule_with_prompt_debriefs_before_switching(tmp_path):
+    """An advance rule that carries a prompt speaks first — grounded in
+    the finished task — then presents the next one."""
+    rules = [{
+        "id": "debrief-and-advance", "on": ["user_message"], "when": "true",
+        "action": "advance", "counts_toward_budget": False,
+        "prompt": "Debrief the finished drill, then move on.",
+    }]
+    tasks = [
+        {"id": "t1", "title": "One", "statement": "s"},
+        {"id": "t2", "title": "Two", "statement": "s"},
+    ]
+    _, rows = run_session(ws_pack(rules, tasks), tmp_path,
+                          adapter=Canned(["Verdict: fine."]), script=["done"])
+    order = [(r["kind"], r.get("task_id") or r.get("rule") or "") for r in rows
+             if r["kind"] in ("task_presented", "interviewer_message")]
+    # opening line, task 1, then: debrief speech BEFORE task 2 appears
+    assert ("interviewer_message", "debrief-and-advance") in order
+    debrief_i = order.index(("interviewer_message", "debrief-and-advance"))
+    t2_i = order.index(("task_presented", "t2"))
+    assert debrief_i < t2_i
+    speech = next(r for r in rows if r.get("rule") == "debrief-and-advance"
+                  and r["kind"] == "interviewer_message")
+    assert speech["text"] == "Verdict: fine."
+    # task rows carry position info for the front end
+    t_rows = [r for r in rows if r["kind"] == "task_presented"]
+    assert [(r["seq"], r["of"]) for r in t_rows] == [(1, 2), (2, 2)]
+
+
 def test_report_renders_pad_writes_with_attribution():
     pack = load_pack("packs/leetcode-drill")
     rows = [
