@@ -16,7 +16,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def extract_config(settings, prefix):\n    config = {}\n    for key in settings.keys():\n        if key.startswith(prefix):\n            value = settings[key]\n            config[key[len(prefix):]] = value\n    return config\n"
+        "content": "def extract_config(settings, prefix):\n    config = {}\n    for key in settings.keys():\n        if key.startswith(prefix):\n            value = settings[key]\n            config[key[len(prefix):]] = value\n    return config\n\nif __name__ == \"__main__\":\n    assert extract_config({\"db_host\": \"x\", \"db_port\": 5432, \"cache_ttl\": 60}, \"db_\") == {\"host\": \"x\", \"port\": 5432}\n    assert extract_config({}, \"app_\") == {}\n    print(\"behavior preserved\")\n"
       }
     ]
   }

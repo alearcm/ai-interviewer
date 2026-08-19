@@ -187,6 +187,9 @@ class Pack:
         self.recent_messages = int(visibility.get("recent_messages", 10))
         self.include_task_notes = bool(visibility.get("include_task_notes", True))
         self.include_clock = bool(visibility.get("include_clock", True))
+        # keep the just-finished task in the model's view so it can be
+        # discussed after an advance (coach-style packs turn this on)
+        self.include_previous_task = bool(visibility.get("include_previous_task", False))
 
         hints = _table(data, "hints")
         ladder_raw = hints.get("ladder", [])

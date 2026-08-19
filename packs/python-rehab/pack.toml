@@ -57,9 +57,10 @@ recent_files = 1
 snapshot_max_chars = 4000
 recent_runs = 1
 run_output_max_chars = 800
-recent_messages = 6
+recent_messages = 12
 include_task_notes = true
 include_clock = true
+include_previous_task = true
 
 [hints]
 ladder = [
@@ -90,12 +91,23 @@ prompt = "The candidate spoke. Coach register: concept questions get a plain com
 [[rules]]
 id = "advance-on-clean-run"
 on = ["run_executed"]
-when = "last_run_ok and task_elapsed_s >= 20"
+when = "last_run_ok and task_elapsed_s >= 20 and since_last_save_s < task_elapsed_s"
 action = "advance"
 counts_toward_budget = false
 cooldown_s = 5
 priority = 90
 prompt = "Their run just passed. Speak ONLY a debrief of the drill just finished: compare their rewrite on screen with the idiomatic reference in your notes — what they landed, what is still un-idiomatic, two sentences at most. Never announce, name or invent the next drill; the system presents it by itself."
+
+[[rules]]
+id = "set-complete"
+on = ["run_executed"]
+when = "last_run_ok and tasks_left == 0 and task_elapsed_s >= 20 and since_last_save_s < task_elapsed_s"
+action = "speak"
+hint = "none"
+counts_toward_budget = false
+max_fires = 1
+priority = 95
+prompt = "Their run just passed the FINAL drill of the set. Debrief it in one sentence, state plainly that every drill is done, and tell them to press end for their report and self-check."
 
 [[rules]]
 id = "stalled-drill"

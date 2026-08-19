@@ -400,3 +400,32 @@ def test_report_renders_pad_writes_with_attribution():
     assert "INTERVIEWER WROTE (solution.py)" in text
     # seeds are setup, not interjections — they stay out of the timeline
     assert "(seed)" not in text
+
+
+def test_pending_save_lands_before_its_own_run(tmp_path):
+    """The stale-debrief bug from live use: the front end saves and runs
+    back-to-back, the debounced file_saved is still pending when the
+    run_executed row arrives — so the debrief spoke about the PREVIOUS
+    snapshot. Run ingestion must flush the watcher first."""
+    raw = mini_pack_raw(
+        session={"minutes": 0.5, "workspace": True, "idle_threshold_s": 30,
+                 "debounce_ms": 2000, "primary_file": "work.txt"},
+    )
+    raw["tasks"] = [{"id": "t1", "title": "One", "statement": "s"}]
+    pack = Pack(raw)
+    session = Session(pack, settings_for(tmp_path), Canned(), Pane(interactive=False),
+                      sessions_dir=str(tmp_path))
+    session.start()
+    time.sleep(0.4)
+    with open(os.path.join(session.workspace, "work.txt"), "w", encoding="utf-8") as fh:
+        fh.write("fresh content\n")
+    time.sleep(0.4)  # inotify delivered; the 2s debounce is still pending
+    session.submit_line("/run cat work.txt")
+    time.sleep(0.5)
+    session.submit_line("/end")
+    deadline = time.time() + 10
+    while not session.is_over() and time.time() < deadline:
+        time.sleep(0.1)
+    rows = read_transcript(os.path.join(session.dir, "transcript.jsonl"))
+    order = [r["kind"] for r in rows if r["kind"] in ("file_saved", "run_executed")]
+    assert order == ["file_saved", "run_executed"], order

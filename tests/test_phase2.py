@@ -164,3 +164,31 @@ def test_rehab_checks_run_green_against_references():
     rows.append({"t": t, "kind": "session_end", "reason": "user"})
     results = checks.run_for_session(rows, pack, RUN_CFG)
     assert all(r["status"] == "ok" for r in results), results
+
+
+def test_rehab_pack_guards_against_hollow_passes():
+    """The advance rule must require a save inside the current drill —
+    an untouched seed or a `ls`-style run can't fake a pass — and every
+    seed must carry a visible self-test so exit 0 means behavior held."""
+    rehab = load_pack("packs/python-rehab")
+    adv = next(r for r in rehab.rules if r.id == "advance-on-clean-run")
+    assert "since_last_save_s" in adv.raw["when"]
+    assert any(r.id == "set-complete" for r in rehab.rules)
+    for task in rehab.tasks:
+        seed = next(s for s in task["seed"] if s["path"] == "solution.py")
+        assert '__main__' in seed["content"], task["id"]
+
+
+def test_rehab_seeds_run_green(tmp_path):
+    """Seeds ship runnable: the self-test block passes as given, so the
+    learner's job is purely the rewrite, never fixing our harness."""
+    from harness.runner import run_command
+
+    rehab = load_pack("packs/python-rehab")
+    for task in rehab.tasks:
+        seed = next(s for s in task["seed"] if s["path"] == "solution.py")
+        name = "%s.py" % task["id"]
+        with open(os.path.join(str(tmp_path), name), "w", encoding="utf-8") as fh:
+            fh.write(seed["content"])
+        res = run_command(sys.executable + " " + name, str(tmp_path), RUN_CFG)
+        assert res["exit_status"] == 0, (task["id"], res["err"])

@@ -19,7 +19,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def audit_line(words, banned):\n    flagged = 0\n    kept = \"\"\n    for i in range(len(words)):\n        w = words[i]\n        hit = False\n        for j in range(len(banned)):\n            if banned[j] == w:\n                hit = True\n        if hit:\n            flagged = flagged + 1\n        else:\n            if kept == \"\":\n                kept = w\n            else:\n                kept = kept + \",\" + w\n    return kept + \"|\" + str(flagged)\n"
+        "content": "def audit_line(words, banned):\n    flagged = 0\n    kept = \"\"\n    for i in range(len(words)):\n        w = words[i]\n        hit = False\n        for j in range(len(banned)):\n            if banned[j] == w:\n                hit = True\n        if hit:\n            flagged = flagged + 1\n        else:\n            if kept == \"\":\n                kept = w\n            else:\n                kept = kept + \",\" + w\n    return kept + \"|\" + str(flagged)\n\nif __name__ == \"__main__\":\n    assert audit_line([\"alpha\", \"beta\", \"gamma\"], [\"beta\"]) == \"alpha,gamma|1\"\n    assert audit_line([\"x\", \"y\"], []) == \"x,y|0\"\n    print(\"behavior preserved\")\n"
       }
     ]
   }

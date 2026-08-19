@@ -17,7 +17,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def total_cost(order):\n    total = 0\n    for i in range(len(order)):\n        item = order[i]\n        total = total + item[0] * item[1]\n    return total\n"
+        "content": "def total_cost(order):\n    total = 0\n    for i in range(len(order)):\n        item = order[i]\n        total = total + item[0] * item[1]\n    return total\n\nif __name__ == \"__main__\":\n    assert total_cost([(2, 3), (1, 10)]) == 16\n    assert total_cost([]) == 0\n    print(\"behavior preserved\")\n"
       }
     ]
   }

@@ -16,7 +16,7 @@
     "seed": [
       {
         "path": "solution.py",
-        "content": "def to_csv_row(fields):\n    row = \"\"\n    first = True\n    for field in fields:\n        if first:\n            row = row + field\n            first = False\n        else:\n            row = row + \",\" + field\n    return row\n"
+        "content": "def to_csv_row(fields):\n    row = \"\"\n    first = True\n    for field in fields:\n        if first:\n            row = row + field\n            first = False\n        else:\n            row = row + \",\" + field\n    return row\n\nif __name__ == \"__main__\":\n    assert to_csv_row([\"a\", \"b\", \"c\"]) == \"a,b,c\"\n    assert to_csv_row([\"solo\"]) == \"solo\"\n    print(\"behavior preserved\")\n"
       }
     ]
   }
