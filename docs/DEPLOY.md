@@ -117,13 +117,16 @@ aiohttp ship aarch64 wheels, and the docker base image is multi-arch.
 ## Variant — public HTTPS + password, no Tailscale
 
 If you'd rather have a normal URL with a login prompt than a private
-network: a free DuckDNS subdomain + Caddy gives automatic Let's
+network: any hostname that resolves to the server — a subdomain of a
+domain you own (one A record at your registrar), or a free DuckDNS
+subdomain if you have none — plus Caddy gives automatic Let's
 Encrypt TLS and basic-auth in front of the pane. The harness itself
 keeps its default 127.0.0.1 bind, so the auth cannot be bypassed by
 hitting :8765 directly — only Caddy (80/443) and SSH are open.
 
-1. duckdns.org → sign in → create `yourname.duckdns.org` → set its IP
-   to the server's public IPv4.
+1. Point the name at the server: at your registrar, add an A record
+   (e.g. host `harness`, value = the server's public IPv4) — or on
+   duckdns.org create `yourname.duckdns.org` with that IP.
 2. On the server, after the standard app setup (user, venv, systemd
    unit with `ExecStart=... harness web` and NO --host flag):
 
