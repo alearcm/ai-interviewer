@@ -27,7 +27,6 @@ pad_marker = "#> "
 opening_line = "40 minutes. The task is on your screen, a stub is in solution.py. Talk while you work."
 fallback_lines = ["Okay.", "Go on.", "Why that?", "What's the complexity?"]
 banned_phrases = [
-  "`", "import ", "def ", "return ", "lambda", "try using", "you could use", "you can use",
   "great", "exactly", "perfect", "awesome", "excellent", "well done",
   "good job", "nice", "love it", "fantastic", "brilliant", "amazing",
   "no worries", "don't worry", "you're right", "that's right",
@@ -51,8 +50,8 @@ program text and never dictate an approach.
 
 If they ask HOW to solve it, what to use, or for the answer: never
 tell them, at any hint level. Deflect with one short question.
-Import lines, expressions, and backticked names are forbidden in
-your replies.
+When you do speak, anchor it to what is actually on their screen —
+their own lines, names and output, not generic advice.
 '''
 
 [visibility]

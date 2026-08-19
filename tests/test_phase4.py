@@ -301,6 +301,55 @@ def test_algo_checks_are_falsifiable():
     assert results and all(r["status"] == "failing" for r in results), results
 
 
+def test_pending_save_lands_in_its_own_task_slice(tmp_path):
+    """The 0/3 self-check bug from live use: work is saved, the run
+    passes, auto-advance fires — but the debounced file_saved row used
+    to land AFTER the next task_presented, so the checker graded the
+    wrong snapshot. Boundary flush must put it in the right slice."""
+    raw = mini_pack_raw(
+        session={"minutes": 0.5, "workspace": True, "idle_threshold_s": 30,
+                 "debounce_ms": 2000},  # long debounce: advance always races it
+    )
+    raw["pack"]["checks"] = {"file": "work.txt", "cmd": "grep -q work {file}", "auto": False}
+    raw["tasks"] = [
+        {"id": "t1", "title": "One", "statement": "s", "check": "checked"},
+        {"id": "t2", "title": "Two", "statement": "s", "check": "checked"},
+    ]
+    pack = Pack(raw)
+    session = Session(pack, settings_for(tmp_path), Canned(), Pane(interactive=False),
+                      sessions_dir=str(tmp_path))
+    session.start()
+    time.sleep(0.4)
+    with open(os.path.join(session.workspace, "work.txt"), "w", encoding="utf-8") as fh:
+        fh.write("task-one work\n")
+    time.sleep(0.4)          # event delivered; 2s debounce still pending
+    session.submit_line("/next")
+    time.sleep(0.4)
+    with open(os.path.join(session.workspace, "work.txt"), "w", encoding="utf-8") as fh:
+        fh.write("task-two work\n")
+    time.sleep(0.3)          # still pending when the session ends
+    session.submit_line("/end")
+    deadline = time.time() + 10
+    while not session.is_over() and time.time() < deadline:
+        time.sleep(0.1)
+
+    rows = read_transcript(os.path.join(session.dir, "transcript.jsonl"))
+    kinds_order = [(r["kind"], r.get("task_id") or r.get("path") or r.get("reason")) for r in rows
+                   if r["kind"] in ("task_presented", "file_saved", "session_end")]
+    # save #1 BEFORE task 2; save #2 BEFORE session_end
+    assert kinds_order == [
+        ("task_presented", "t1"),
+        ("file_saved", "work.txt"),
+        ("task_presented", "t2"),
+        ("file_saved", "work.txt"),
+        ("session_end", "user"),
+    ], kinds_order
+
+    # and the checker now grades each task against its own snapshot
+    results = checks.run_for_session(rows, pack, RUN_CFG)
+    assert [r["status"] for r in results] == ["ok", "ok"]
+
+
 def test_report_renders_pad_writes_with_attribution():
     pack = load_pack("packs/leetcode-drill")
     rows = [

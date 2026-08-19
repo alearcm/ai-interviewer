@@ -352,18 +352,22 @@ class Session:
                     counted=False,
                 )
                 continue
-            fields = {k: v for k, v in item.items() if k != "kind"}
-            if kind == events.IDLE:
-                fields["idle_s"] = round(self.offset() - self.state.last_activity_t, 3)
-            row = self._record(kind, **fields)
-            if kind == events.SESSION_START:
-                # the full pack goes in before any gate activity, so a
-                # transcript is self-contained from its second row on
-                self._record(events.PACK_SNAPSHOT, data=self.pack.snapshot())
-            if kind in events.ACTIVITY_KINDS:
-                self.scheduler.reset_idle()
-            if kind in events.WAKE_KINDS:
-                self._wake(row)
+            self._ingest(item)
+
+    def _ingest(self, item: Dict[str, Any], wake: bool = True) -> None:
+        item = dict(item)
+        kind = item.pop("kind")
+        if kind == events.IDLE:
+            item["idle_s"] = round(self.offset() - self.state.last_activity_t, 3)
+        row = self._record(kind, **item)
+        if kind == events.SESSION_START:
+            # the full pack goes in before any gate activity, so a
+            # transcript is self-contained from its second row on
+            self._record(events.PACK_SNAPSHOT, data=self.pack.snapshot())
+        if kind in events.ACTIVITY_KINDS:
+            self.scheduler.reset_idle()
+        if wake and kind in events.WAKE_KINDS:
+            self._wake(row)
 
     def _record(self, kind: str, **fields: Any) -> Dict[str, Any]:
         row = self.transcript.append(kind, self.offset(), **fields)
@@ -527,6 +531,12 @@ class Session:
         )
 
     def _advance(self, by: str = "user") -> None:
+        # a debounced save may still be pending from the work that
+        # triggered this advance; land it in THIS task's slice, not
+        # the next one's
+        if self.watch is not None:
+            for pending in self.watch.flush_pending():
+                self._ingest(pending)
         state = self.state
         nxt = state.task_index + 1
         if nxt >= len(self.task_order):
@@ -666,6 +676,10 @@ class Session:
     # -- teardown --------------------------------------------------------
     def _finalize(self, reason: str) -> None:
         if self.watch is not None:
+            # last keystrokes beat the debounce timer into the record;
+            # no gate wake — the session is over
+            for pending in self.watch.flush_pending():
+                self._ingest(pending, wake=False)
             self.watch.stop()
         self.scheduler.stop()
         self._record(events.SESSION_END, reason=reason)
